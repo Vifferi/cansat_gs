@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CanSat — Hardware Sensor Test</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@300;400;600;700&display=swap');
+:root{
+  --bg0:#030e1a;--bg1:#071828;--bg2:#0c2236;
+  --fg:#cceeff;--fg2:#88bbdd;--fg3:rgba(120,180,220,0.45);
+  --cyan:#00d4ff;--green:#00ff88;--amber:#ffc040;--red:#ff4060;--purple:#bb88ff;--teal:#00ffcc;
+  --cyan-dim:rgba(0,212,255,0.1);--green-dim:rgba(0,255,136,0.1);
+  --amber-dim:rgba(255,192,64,0.1);--red-dim:rgba(255,64,96,0.1);
+  --border:rgba(0,180,255,0.15);--border2:rgba(0,180,255,0.28);
+  --glow:0 0 12px rgba(0,212,255,0.1);
+  --font-mono:'Share Tech Mono',monospace;
+  --font-ui:'Barlow Condensed',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:var(--font-ui);background:var(--bg0);color:var(--fg);min-height:100vh;font-size:14px;}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
+  background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,0.016) 3px,rgba(0,0,0,0.016) 4px);}
+
+header{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:0 14px;height:46px;
+  background:var(--bg1);border-bottom:1px solid var(--border2);position:sticky;top:0;z-index:300;}
+.logo{font-family:var(--font-mono);font-size:13px;letter-spacing:3px;color:var(--cyan);}
+.logo em{color:var(--amber);font-style:normal;}
+.hc{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;}
+#ws-badge{font-family:var(--font-mono);font-size:10px;padding:3px 10px;border-radius:20px;
+  border:1px solid var(--red);color:var(--red);letter-spacing:2px;transition:all .3s;}
+#ws-badge.on{border-color:var(--green);color:var(--green);}
+.hbtn{font-family:var(--font-mono);font-size:10px;letter-spacing:1px;padding:4px 12px;border-radius:4px;
+  cursor:pointer;border:1px solid var(--border2);background:transparent;color:var(--fg2);
+  transition:all .2s;text-decoration:none;display:inline-flex;align-items:center;}
+.hbtn:hover{background:var(--border);color:var(--cyan);}
+.hbtn.g{border-color:var(--green);color:var(--green);}
+
+/* INSTRUCTIONS */
+.info-box{margin:12px 14px 0;background:var(--bg1);border:1px solid var(--border2);border-radius:8px;
+  padding:12px 16px;font-family:var(--font-mono);font-size:10px;color:var(--fg3);}
+.info-box strong{color:var(--amber);}
+.code-row{display:flex;flex-wrap:wrap;gap:14px;margin-top:8px;}
+.code-chip{background:var(--bg2);border:1px solid var(--border);border-radius:4px;padding:4px 10px;
+  font-size:10px;color:var(--cyan);white-space:nowrap;}
+
+/* SENSOR GRID */
+.sensor-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px;padding:12px 14px;}
+
+/* SENSOR PANEL */
+.sp{background:var(--bg1);border:1px solid var(--border);border-radius:10px;padding:14px;
+  box-shadow:var(--glow);transition:border-color .4s;}
+.sp.pass{border-color:rgba(0,255,136,.35);}
+.sp.warn{border-color:rgba(255,192,64,.35);}
+.sp.fail{border-color:rgba(255,64,96,.35);}
+.sp-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.sp-title{font-family:var(--font-mono);font-size:10px;letter-spacing:2px;color:var(--fg3);text-transform:uppercase;}
+.sp-title em{color:var(--c,var(--cyan));font-style:normal;}
+.sp-meta{display:flex;gap:8px;align-items:center;}
+.sp-hz{font-family:var(--font-mono);font-size:9px;color:var(--fg3);}
+.sp-ts{font-family:var(--font-mono);font-size:9px;color:var(--fg3);}
+
+/* BADGE */
+.badge{display:inline-flex;align-items:center;font-family:var(--font-mono);font-size:9px;
+  letter-spacing:1px;padding:2px 8px;border-radius:3px;border:1px solid;}
+.b-wait{border-color:rgba(100,100,100,.3);color:rgba(140,140,140,.5);}
+.b-pass{border-color:var(--green);color:var(--green);background:var(--green-dim);}
+.b-warn{border-color:var(--amber);color:var(--amber);background:var(--amber-dim);}
+.b-fail{border-color:var(--red);color:var(--red);background:var(--red-dim);}
+
+/* FIELD ROWS */
+.field-row{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);}
+.field-row:last-child{border-bottom:none;}
+.f-label{font-size:9px;letter-spacing:1px;color:var(--fg3);text-transform:uppercase;width:90px;flex-shrink:0;}
+.f-val{font-family:var(--font-mono);font-size:18px;color:var(--c,var(--cyan));flex:1;}
+.f-unit{font-size:10px;color:var(--fg3);margin-left:2px;}
+.f-bar-wrap{flex:1;height:4px;background:var(--bg2);border-radius:2px;overflow:hidden;}
+.f-bar{height:100%;border-radius:2px;background:var(--c,var(--cyan));transition:width .4s;}
+.f-range{font-family:var(--font-mono);font-size:9px;color:var(--fg3);width:60px;text-align:right;flex-shrink:0;}
+.f-trend{font-size:12px;width:14px;text-align:center;flex-shrink:0;}
+
+/* STATS ROW */
+.stats-row{display:flex;gap:12px;margin-top:8px;flex-wrap:wrap;}
+.stat-chip{font-family:var(--font-mono);font-size:9px;color:var(--fg3);
+  background:var(--bg2);border:1px solid var(--border);border-radius:3px;padding:2px 8px;}
+.stat-chip span{color:var(--fg2);}
+
+/* CHART */
+.sp-chart{margin-top:10px;position:relative;height:80px;}
+
+/* LOG */
+.log-wrap{margin:0 14px 80px;background:var(--bg1);border:1px solid var(--border);border-radius:8px;padding:12px;}
+.log-title{font-family:var(--font-mono);font-size:9px;letter-spacing:2px;color:var(--fg3);margin-bottom:8px;}
+.log-body{height:130px;overflow-y:auto;font-family:var(--font-mono);font-size:10px;}
+.log-body::-webkit-scrollbar{width:4px;}
+.log-body::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
+.log-row{display:flex;gap:10px;padding:2px 0;border-bottom:1px solid rgba(255,255,255,.04);}
+.log-ts{color:var(--fg3);flex-shrink:0;width:66px;}
+.log-sensor{width:36px;flex-shrink:0;}
+.log-msg{color:var(--fg2);}
+
+/* FOOTER BAR */
+.fbar{position:fixed;bottom:0;left:0;right:0;background:var(--bg1);border-top:1px solid var(--border2);
+  padding:8px 14px;display:flex;align-items:center;gap:12px;z-index:200;flex-wrap:wrap;}
+.fbar-info{font-family:var(--font-mono);font-size:9px;color:var(--fg3);line-height:1.9;}
+.fbar-info strong{color:var(--fg2);}
+.fbar-btns{margin-left:auto;display:flex;gap:8px;}
+
+/* TOAST */
+#toast{position:fixed;bottom:60px;right:16px;z-index:500;background:var(--bg1);border:1px solid var(--green);
+  color:var(--green);font-family:var(--font-mono);font-size:11px;padding:10px 16px;border-radius:7px;
+  letter-spacing:1px;display:none;animation:fu .3s ease;}
+@keyframes fu{from{transform:translateY(8px);opacity:0}to{transform:translateY(0);opacity:1}}
+
+/* GPS dots */
+.sat-ring{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;}
+.sat-dot{width:7px;height:7px;border-radius:50%;background:var(--border);transition:background .3s;}
+.sat-dot.on{background:var(--green);}
+</style>
+</head>
+<body>
+<div id="toast"></div>
+
+<header>
+  <div class="logo">⬡ CANSAT <em>SENSOR TEST</em></div>
+  <div class="hc">
+    <div id="ws-badge">● DISCONNECTED</div>
+    <span id="pkt-count" style="font-family:var(--font-mono);font-size:9px;color:var(--fg3)">pkts: 0</span>
+  </div>
+  <button class="hbtn" onclick="clearAll()">↺ CLEAR</button>
+  <a class="hbtn g" href="dashboard.html">⬡ DASHBOARD</a>
+</header>
+
+<!-- INSTRUCTIONS -->
+<div class="info-box">
+  <strong>วิธีทดสอบ hardware ทีละตัว</strong> — ส่งข้อมูลจาก ESP32 ผ่าน Serial ในรูปแบบด้านล่าง รัน server ด้วย <code style="color:var(--cyan)">python server.py --port COM3</code>
+  <div class="code-row">
+    <div><div style="color:var(--fg3);font-size:9px;margin-bottom:3px;">🌡 BME280</div><div class="code-chip">BME:&lt;temp&gt;,&lt;hum&gt;,&lt;alt&gt;</div></div>
+    <div><div style="color:var(--fg3);font-size:9px;margin-bottom:3px;">📍 GPS</div><div class="code-chip">GPS:&lt;lat&gt;,&lt;lon&gt;,&lt;sat&gt;</div></div>
+    <div><div style="color:var(--fg3);font-size:9px;margin-bottom:3px;">🏃 MPU6050</div><div class="code-chip">IMU:&lt;ax&gt;,&lt;ay&gt;,&lt;az&gt;,&lt;hdg&gt;</div></div>
+    <div><div style="color:var(--fg3);font-size:9px;margin-bottom:3px;">💨 PMS5003</div><div class="code-chip">PM:&lt;pm1&gt;,&lt;pm25&gt;,&lt;pm10&gt;</div></div>
+    <div><div style="color:var(--fg3);font-size:9px;margin-bottom:3px;">⚡ INA219</div><div class="code-chip">PWR:&lt;voltage&gt;,&lt;current&gt;</div></div>
+    <div><div style="color:var(--fg3);font-size:9px;margin-bottom:3px;">📦 Full CSV</div><div class="code-chip">time,pkt,lat,lon,sat,temp,…</div></div>
+  </div>
+</div>
+
+<!-- SENSOR PANELS -->
+<div class="sensor-grid">
+
+  <!-- ENV -->
+  <div class="sp" id="sp-env" style="--c:var(--green)">
+    <div class="sp-head">
+      <div class="sp-title"><em>🌡 ENV</em> — BME280 / SHT40</div>
+      <div class="sp-meta">
+        <span class="sp-hz" id="hz-env">— Hz</span>
+        <span class="badge b-wait" id="badge-env">WAITING</span>
+      </div>
+    </div>
+    <div id="fields-env">
+      <div class="field-row"><span class="f-label">Temperature</span><span class="f-val" id="fv-temp">—</span><span class="f-unit">°C</span><span class="f-trend" id="tr-temp"></span><div class="f-bar-wrap"><div class="f-bar" id="fb-temp" style="width:0%"></div></div><span class="f-range" id="fr-temp"></span></div>
+      <div class="field-row"><span class="f-label">Humidity</span>   <span class="f-val" id="fv-hum">—</span> <span class="f-unit">%</span>  <span class="f-trend" id="tr-hum"></span> <div class="f-bar-wrap"><div class="f-bar" id="fb-hum"  style="width:0%;background:var(--amber)"></div></div><span class="f-range" id="fr-hum"></span></div>
+      <div class="field-row"><span class="f-label">Altitude</span>   <span class="f-val" id="fv-alt">—</span> <span class="f-unit">m</span>  <span class="f-trend" id="tr-alt"></span> <div class="f-bar-wrap"><div class="f-bar" id="fb-alt"  style="width:0%"></div></div><span class="f-range" id="fr-alt"></span></div>
+    </div>
+    <div class="stats-row">
+      <div class="stat-chip">noise±<span id="noise-temp">—</span>°C</div>
+      <div class="stat-chip">min <span id="min-temp">—</span></div>
+      <div class="stat-chip">max <span id="max-temp">—</span></div>
+      <div class="stat-chip">pkts <span id="n-env">0</span></div>
+    </div>
+    <div class="sp-chart"><canvas id="ch-env"></canvas></div>
+    <div style="font-family:var(--font-mono);font-size:9px;color:var(--fg3);margin-top:5px">Last: <span id="ts-env">—</span></div>
+  </div>
+
+  <!-- GPS -->
+  <div class="sp" id="sp-gps" style="--c:var(--teal)">
+    <div class="sp-head">
+      <div class="sp-title"><em>📍 GPS</em> — NEO-6M / L76K</div>
+      <div class="sp-meta">
+        <span class="sp-hz" id="hz-gps">— Hz</span>
+        <span class="badge b-wait" id="badge-gps">WAITING</span>
+      </div>
+    </div>
+    <div class="field-row"><span class="f-label">Latitude</span>   <span class="f-val" id="fv-lat" style="font-size:14px">—</span><span class="f-unit">°N</span><span class="f-trend" id="tr-lat"></span></div>
+    <div class="field-row"><span class="f-label">Longitude</span>  <span class="f-val" id="fv-lon" style="font-size:14px">—</span><span class="f-unit">°E</span><span class="f-trend" id="tr-lon"></span></div>
+    <div class="field-row">
+      <span class="f-label">Satellites</span>
+      <span class="f-val" id="fv-sat">—</span>
+      <div class="f-bar-wrap"><div class="f-bar" id="fb-sat" style="width:0%;background:var(--teal)"></div></div>
+      <span class="f-range" id="fr-sat"></span>
+    </div>
+    <div class="sat-ring" id="sat-ring">
+      <div style="font-family:var(--font-mono);font-size:9px;color:var(--fg3)">รอสัญญาณ GPS...</div>
+    </div>
+    <div class="stats-row">
+      <div class="stat-chip">HDOP est. <span id="v-hdop">—</span></div>
+      <div class="stat-chip">pkts <span id="n-gps">0</span></div>
+    </div>
+    <div class="sp-chart"><canvas id="ch-gps"></canvas></div>
+    <div style="font-family:var(--font-mono);font-size:9px;color:var(--fg3);margin-top:5px">Last: <span id="ts-gps">—</span></div>
+  </div>
+
+  <!-- IMU -->
+  <div class="sp" id="sp-imu" style="--c:var(--purple)">
+    <div class="sp-head">
+      <div class="sp-title"><em>🏃 IMU</em> — MPU6050 / ICM-42688</div>
+      <div class="sp-meta">
+        <span class="sp-hz" id="hz-imu">— Hz</span>
+        <span class="badge b-wait" id="badge-imu">WAITING</span>
+      </div>
+    </div>
+    <div class="field-row"><span class="f-label">Acc X</span><span class="f-val" id="fv-ax" style="color:#ff6680">—</span><span class="f-unit">mg</span><span class="f-trend" id="tr-ax"></span><div class="f-bar-wrap"><div class="f-bar" id="fb-ax" style="width:50%;background:#ff6680"></div></div><span class="f-range" id="fr-ax"></span></div>
+    <div class="field-row"><span class="f-label">Acc Y</span><span class="f-val" id="fv-ay" style="color:#00ff88">—</span><span class="f-unit">mg</span><span class="f-trend" id="tr-ay"></span><div class="f-bar-wrap"><div class="f-bar" id="fb-ay" style="width:50%;background:#00ff88"></div></div><span class="f-range" id="fr-ay"></span></div>
+    <div class="field-row"><span class="f-label">Acc Z</span><span class="f-val" id="fv-az" style="color:var(--purple)">—</span><span class="f-unit">mg</span><span class="f-trend" id="tr-az"></span><div class="f-bar-wrap"><div class="f-bar" id="fb-az" style="width:50%;background:var(--purple)"></div></div><span class="f-range" id="fr-az"></span></div>
+    <div class="field-row"><span class="f-label">Heading</span><span class="f-val" id="fv-hdg">—</span><span class="f-unit">°</span><span class="f-trend" id="tr-hdg"></span><div class="f-bar-wrap"><div class="f-bar" id="fb-hdg" style="width:0%;background:var(--cyan)"></div></div><span class="f-range" id="fr-hdg"></span></div>
+    <div class="stats-row">
+      <div class="stat-chip">|v| <span id="v-mag">—</span> mg</div>
+      <div class="stat-chip">noise±<span id="noise-az">—</span>mg</div>
+      <div class="stat-chip">pkts <span id="n-imu">0</span></div>
+    </div>
+    <div class="sp-chart"><canvas id="ch-imu"></canvas></div>
+    <div style="font-family:var(--font-mono);font-size:9px;color:var(--fg3);margin-top:5px">Last: <span id="ts-imu">—</span></div>
+  </div>
+
+  <!-- AIR -->
+  <div class="sp" id="sp-air" style="--c:var(--cyan)">
+    <div class="sp-head">
+      <div class="sp-title"><em>💨 AIR</em> — PMS5003 / SEN55</div>
+      <div class="sp-meta">
+        <span class="sp-hz" id="hz-air">— Hz</span>
+        <span class="badge b-wait" id="badge-air">WAITING</span>
+      </div>
+    </div>
+    <div class="field-row"><span class="f-label">PM 1.0</span><span class="f-val" id="fv-pm1">—</span><span class="f-unit">µg/m³</span><span class="f-trend" id="tr-pm1"></span><div class="f-bar-wrap"><div class="f-bar" id="fb-pm1" style="width:0%;background:#00aadd"></div></div><span class="f-range" id="fr-pm1"></span></div>
+    <div class="field-row"><span class="f-label">PM 2.5</span><span class="f-val" id="fv-pm25">—</span><span class="f-unit">µg/m³</span><span class="f-trend" id="tr-pm25"></span><div class="f-bar-wrap"><div class="f-bar" id="fb-pm25" style="width:0%;background:#0077aa"></div></div><span class="f-range" id="fr-pm25"></span></div>
+    <div class="field-row"><span class="f-label">PM 10</span><span class="f-val" id="fv-pm10">—</span><span class="f-unit">µg/m³</span><span class="f-trend" id="tr-pm10"></span><div class="f-bar-wrap"><div class="f-bar" id="fb-pm10" style="width:0%;background:#004488"></div></div><span class="f-range" id="fr-pm10"></span></div>
+    <div class="stats-row">
+      <div class="stat-chip">AQI est. <span id="v-aqi">—</span></div>
+      <div class="stat-chip">avg PM2.5 <span id="avg-pm25">—</span></div>
+      <div class="stat-chip">pkts <span id="n-air">0</span></div>
+    </div>
+    <div class="sp-chart"><canvas id="ch-air"></canvas></div>
+    <div style="font-family:var(--font-mono);font-size:9px;color:var(--fg3);margin-top:5px">Last: <span id="ts-air">—</span></div>
+  </div>
+
+  <!-- POWER -->
+  <div class="sp" id="sp-pwr" style="--c:var(--amber)">
+    <div class="sp-head">
+      <div class="sp-title"><em>⚡ POWER</em> — INA219 / BMS</div>
+      <div class="sp-meta">
+        <span class="sp-hz" id="hz-pwr">— Hz</span>
+        <span class="badge b-wait" id="badge-pwr">WAITING</span>
+      </div>
+    </div>
+    <div class="field-row"><span class="f-label">Voltage</span><span class="f-val" id="fv-volt">—</span><span class="f-unit">V</span><span class="f-trend" id="tr-volt"></span><div class="f-bar-wrap"><div class="f-bar" id="fb-volt" style="width:0%;background:var(--amber)"></div></div><span class="f-range" id="fr-volt"></span></div>
+    <div class="field-row"><span class="f-label">Current</span><span class="f-val" id="fv-curr">—</span><span class="f-unit">mA</span><span class="f-trend" id="tr-curr"></span><div class="f-bar-wrap"><div class="f-bar" id="fb-curr" style="width:0%"></div></div><span class="f-range" id="fr-curr"></span></div>
+    <div class="field-row">
+      <span class="f-label">Battery</span>
+      <span class="f-val" id="fv-bat">—</span><span class="f-unit">%</span>
+      <span style="margin-left:8px;font-family:var(--font-mono);font-size:11px;color:var(--fg3)"><span id="fv-power">—</span> W</span>
+    </div>
+    <div style="width:100%;height:6px;background:var(--bg2);border-radius:3px;overflow:hidden;border:1px solid var(--border);margin-top:6px;">
+      <div id="bat-bar" style="height:100%;border-radius:3px;background:var(--green);width:0%;transition:width .4s,background .4s;"></div>
+    </div>
+    <div class="stats-row">
+      <div class="stat-chip">min V <span id="min-volt">—</span></div>
+      <div class="stat-chip">max I <span id="max-curr">—</span>mA</div>
+      <div class="stat-chip">pkts <span id="n-pwr">0</span></div>
+    </div>
+    <div class="sp-chart"><canvas id="ch-pwr"></canvas></div>
+    <div style="font-family:var(--font-mono);font-size:9px;color:var(--fg3);margin-top:5px">Last: <span id="ts-pwr">—</span></div>
+  </div>
+
+</div><!-- /sensor-grid -->
+
+<!-- LOG -->
+<div class="log-wrap">
+  <div class="log-title">▸ DATA LOG</div>
+  <div class="log-body" id="log-body">
+    <div class="log-row"><span class="log-ts"></span><span class="log-msg" style="color:var(--fg3)">รอข้อมูลจาก hardware...</span></div>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<div class="fbar">
+  <div class="fbar-info">
+    <div>Total packets: <strong id="total-pkts">0</strong> &nbsp;|&nbsp; Uptime: <strong id="uptime">00:00</strong></div>
+    <div id="fbar-status" style="color:var(--fg3)">ยังไม่ได้เชื่อมต่อ — รัน <code style="color:var(--cyan)">python server.py --port COM3</code></div>
+  </div>
+  <div class="fbar-btns">
+    <button class="hbtn" onclick="exportReport()">⬇ Export Log</button>
+    <button class="hbtn" onclick="clearAll()">↺ Clear</button>
+  </div>
+</div>
+
+<script>
+Chart.defaults.font.family = "'Share Tech Mono',monospace";
+Chart.defaults.font.size = 9;
+
+// ── Sensor config ────────────────────────────────────────────────────────────
+const CFG = {
+  env: {
+    color:'#00ff88',
+    fields:{
+      temp:    {lo:-10,  hi:60,   barMin:-20,  barMax:80,   dp:1, unit:'°C', label:'Temp'},
+      humidity:{lo:5,    hi:95,   barMin:0,    barMax:100,  dp:1, unit:'%',  label:'Hum'},
+      alt_baro:{lo:-100, hi:5000, barMin:0,    barMax:5000, dp:0, unit:'m',  label:'Alt'},
+    },
+    chartKeys:['temp','humidity'], chartColors:['#00ff88','#ffc040'],
+  },
+  gps: {
+    color:'#00ffcc',
+    fields:{
+      lat:{lo:-90, hi:90,  dp:6},
+      lon:{lo:-180,hi:180, dp:6},
+      sat:{lo:4,   hi:20,  barMin:0, barMax:20, dp:0, unit:'sats', label:'Sat'},
+    },
+    chartKeys:['sat'], chartColors:['#00ffcc'],
+  },
+  imu: {
+    color:'#bb88ff',
+    fields:{
+      acc_x:{lo:-2000,hi:2000,barMin:-2000,barMax:2000,dp:0,unit:'mg',label:'X'},
+      acc_y:{lo:-2000,hi:2000,barMin:-2000,barMax:2000,dp:0,unit:'mg',label:'Y'},
+      acc_z:{lo:-2000,hi:2000,barMin:-2000,barMax:2000,dp:0,unit:'mg',label:'Z'},
+      heading:{lo:0,hi:360,barMin:0,barMax:360,dp:0,unit:'°',label:'Hdg'},
+    },
+    chartKeys:['acc_x','acc_y','acc_z'], chartColors:['#ff6680','#00ff88','#bb88ff'],
+  },
+  air: {
+    color:'#00d4ff',
+    fields:{
+      pm1_0:{lo:0,hi:500,barMin:0,barMax:500,dp:1,unit:'µg',label:'PM1'},
+      pm2_5:{lo:0,hi:500,barMin:0,barMax:500,dp:1,unit:'µg',label:'PM2.5'},
+      pm10: {lo:0,hi:500,barMin:0,barMax:500,dp:1,unit:'µg',label:'PM10'},
+    },
+    chartKeys:['pm2_5'], chartColors:['#0077aa'],
+  },
+  pwr: {
+    color:'#ffc040',
+    fields:{
+      voltage:{lo:3.0,hi:4.3,barMin:2.5,barMax:4.2,dp:2,unit:'V', label:'V'},
+      current:{lo:0,  hi:2000,barMin:0,  barMax:2000,dp:0,unit:'mA',label:'I'},
+    },
+    chartKeys:['voltage','current'], chartColors:['#ffc040','#00d4ff'],
+  },
+};
+
+// ── Rolling history (max 120 samples per sensor key) ──────────────────────────
+const HIST_MAX = 120;
+const CHART_MAX = 60;
+const hist   = {};   // {key: [values]}
+const counts = {};   // {sensor: n}
+const rates  = {};   // {sensor: Hz}
+const rateTs = {};   // {sensor: timestamps[]}
+let totalPkts = 0;
+const startTs = Date.now();
+
+Object.keys(CFG).forEach(s => {
+  counts[s] = 0;
+  rates[s]  = 0;
+  rateTs[s] = [];
+  Object.keys(CFG[s].fields).forEach(k => hist[k] = []);
+});
+
+// ── Charts ────────────────────────────────────────────────────────────────────
+const chartOpts = {
+  responsive:true, maintainAspectRatio:false,
+  animation:{duration:120},
+  plugins:{legend:{display:false}},
+  scales:{
+    x:{display:false},
+    y:{ticks:{color:'rgba(120,180,220,0.45)',font:{size:8}},
+       grid:{color:'rgba(0,180,255,0.08)'},border:{color:'rgba(0,180,255,0.1)'}},
+  },
+};
+
+function mkChart(id, cfg) {
+  const el = document.getElementById(id);
+  if (!el) return null;
+  return new Chart(el, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: cfg.chartKeys.map((k, i) => ({
+        data: [], pointRadius: 0, borderWidth: 1.5, tension: 0.3,
+        borderColor: cfg.chartColors[i],
+        backgroundColor: cfg.chartColors[i].replace(/^#/, '') === cfg.chartColors[i]
+          ? undefined : cfg.chartColors[i] + '18',
+      })),
+    },
+    options: chartOpts,
+  });
+}
+
+const Charts = {
+  env: mkChart('ch-env', CFG.env),
+  gps: mkChart('ch-gps', CFG.gps),
+  imu: mkChart('ch-imu', CFG.imu),
+  air: mkChart('ch-air', CFG.air),
+  pwr: mkChart('ch-pwr', CFG.pwr),
+};
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function si(id, v) { const e = document.getElementById(id); if (e) e.textContent = v; }
+function fm(v, dp) { return (v == null || !isFinite(v)) ? '—' : Number(v).toFixed(dp); }
+function now() { return new Date().toLocaleTimeString('th-TH'); }
+
+function stdev(arr) {
+  if (arr.length < 2) return null;
+  const n = arr.length, m = arr.reduce((a,b) => a+b, 0)/n;
+  return Math.sqrt(arr.reduce((s,v) => s+(v-m)**2, 0)/(n-1));
+}
+
+function updateRate(sensor) {
+  const ts = rateTs[sensor];
+  const now_ms = Date.now();
+  ts.push(now_ms);
+  while (ts.length > 20) ts.shift();
+  if (ts.length >= 2) {
+    const elapsed = (ts[ts.length-1] - ts[0]) / 1000;
+    rates[sensor] = elapsed > 0 ? ((ts.length-1)/elapsed).toFixed(1) : 0;
+  }
+  si('hz-'+sensor, rates[sensor]+' Hz');
+}
+
+function pushHist(key, val) {
+  hist[key].push(val);
+  if (hist[key].length > HIST_MAX) hist[key].shift();
+}
+
+function pushChart(chart, lbl, sensor) {
+  if (!chart) return;
+  chart.data.labels.push(lbl);
+  CFG[sensor].chartKeys.forEach((k, i) => {
+    const vals = hist[k];
+    chart.data.datasets[i].data.push(vals.length ? vals[vals.length-1] : null);
+  });
+  if (chart.data.labels.length > CHART_MAX) {
+    chart.data.labels.shift();
+    chart.data.datasets.forEach(d => d.data.shift());
+  }
+  chart.update('none');
+}
+
+function trend(key) {
+  const h = hist[key];
+  if (h.length < 3) return '';
+  const d = h[h.length-1] - h[h.length-3];
+  return d > 0.5 ? '↑' : d < -0.5 ? '↓' : '·';
+}
+
+function setBadge(sensor, status, label) {
+  const el = document.getElementById('badge-'+sensor);
+  const panel = document.getElementById('sp-'+sensor);
+  if (!el || !panel) return;
+  el.className = 'badge b-'+status;
+  el.textContent = label;
+  panel.className = 'sp ' + (status === 'pass' ? 'pass' : status === 'fail' ? 'fail' : status === 'warn' ? 'warn' : '');
+}
+
+function fieldStatus(key, val, cfg) {
+  if (!cfg || cfg.lo == null) return 'pass';
+  if (val < cfg.lo || val > cfg.hi) return 'fail';
+  const margin = (cfg.hi - cfg.lo) * 0.1;
+  if (val < cfg.lo + margin || val > cfg.hi - margin) return 'warn';
+  return 'pass';
+}
+
+function barPct(val, cfg) {
+  if (!cfg || cfg.barMin == null) return 50;
+  return Math.max(0, Math.min(100, (val - cfg.barMin) / (cfg.barMax - cfg.barMin) * 100));
+}
+
+// ── Update panels ─────────────────────────────────────────────────────────────
+function updateENV(d) {
+  const lbl = now();
+  ['temp','humidity','alt_baro'].forEach(k => {
+    if (d[k] == null) return;
+    pushHist(k, d[k]);
+  });
+  const t = hist.temp, h = hist.humidity;
+  if (t.length) {
+    si('fv-temp', fm(t[t.length-1], 1));
+    si('tr-temp', trend('temp'));
+    si('fr-temp', fm(Math.min(...t),1)+'~'+fm(Math.max(...t),1));
+    const sd = stdev(t.slice(-20));
+    si('noise-temp', sd != null ? fm(sd,2) : '—');
+    si('min-temp', fm(Math.min(...t),1));
+    si('max-temp', fm(Math.max(...t),1));
+    document.getElementById('fb-temp').style.width = barPct(t[t.length-1], CFG.env.fields.temp)+'%';
+  }
+  if (h.length) {
+    si('fv-hum', fm(h[h.length-1], 1));
+    si('tr-hum', trend('humidity'));
+    document.getElementById('fb-hum').style.width = barPct(h[h.length-1], CFG.env.fields.humidity)+'%';
+  }
+  if (hist.alt_baro.length) {
+    const a = hist.alt_baro;
+    si('fv-alt', fm(a[a.length-1], 0));
+    si('tr-alt', trend('alt_baro'));
+    document.getElementById('fb-alt').style.width = barPct(a[a.length-1], CFG.env.fields.alt_baro)+'%';
+  }
+  si('n-env', counts.env);
+  si('ts-env', lbl);
+  pushChart(Charts.env, lbl, 'env');
+
+  // overall status
+  const tv = hist.temp.length ? hist.temp[hist.temp.length-1] : null;
+  const st = tv != null ? fieldStatus('temp', tv, CFG.env.fields.temp) : 'wait';
+  setBadge('env', st === 'wait' ? 'wait' : st, st === 'pass' ? '✓ PASS' : st === 'warn' ? '⚠ WARN' : st === 'fail' ? '✗ FAIL' : 'WAITING');
+}
+
+function updateGPS(d) {
+  const lbl = now();
+  const sat = d.sat != null ? d.sat : (hist.sat.length ? hist.sat[hist.sat.length-1] : null);
+  if (d.lat != null) { pushHist('lat', d.lat); si('fv-lat', fm(d.lat, 6)); si('tr-lat', trend('lat')); }
+  if (d.lon != null) { pushHist('lon', d.lon); si('fv-lon', fm(d.lon, 6)); si('tr-lon', trend('lon')); }
+  if (sat != null) {
+    pushHist('sat', sat);
+    si('fv-sat', sat);
+    document.getElementById('fb-sat').style.width = (sat/20*100)+'%';
+    si('fr-sat', sat+'/20');
+    const hdop = sat >= 4 ? fm(Math.max(0.8, 3-sat*0.15), 1) : '99.9';
+    si('v-hdop', hdop);
+
+    // Sat ring — reuse existing dots or create once
+    const ring = document.getElementById('sat-ring');
+    let dots = ring.querySelectorAll('.sat-dot');
+    if (dots.length !== 20) {
+      ring.innerHTML = '';
+      for (let i = 0; i < 20; i++) {
+        const d2 = document.createElement('div'); d2.className = 'sat-dot'; ring.appendChild(d2);
+      }
+      dots = ring.querySelectorAll('.sat-dot');
+    }
+    dots.forEach((d2, i) => d2.classList.toggle('on', i < sat));
+  }
+  si('n-gps', counts.gps);
+  si('ts-gps', lbl);
+  pushChart(Charts.gps, lbl, 'gps');
+
+  const s = sat != null ? fieldStatus('sat', sat, CFG.gps.fields.sat) : 'wait';
+  const label = sat == null ? 'WAITING' : sat === 0 ? '✗ NO FIX' : sat < 4 ? '⚠ 2D FIX' : '✓ 3D FIX';
+  const cls = sat == null ? 'wait' : sat === 0 ? 'fail' : sat < 4 ? 'warn' : 'pass';
+  setBadge('gps', cls, label);
+}
+
+function updateIMU(d) {
+  const lbl = now();
+  ['acc_x','acc_y','acc_z','heading'].forEach(k => { if (d[k] != null) pushHist(k, d[k]); });
+  const ax = hist.acc_x, ay = hist.acc_y, az = hist.acc_z;
+  const last = k => hist[k].length ? hist[k][hist[k].length-1] : null;
+  if (ax.length) { si('fv-ax', fm(last('acc_x'),0)); si('tr-ax', trend('acc_x')); document.getElementById('fb-ax').style.width = barPct(last('acc_x'), CFG.imu.fields.acc_x)+'%'; }
+  if (ay.length) { si('fv-ay', fm(last('acc_y'),0)); si('tr-ay', trend('acc_y')); document.getElementById('fb-ay').style.width = barPct(last('acc_y'), CFG.imu.fields.acc_y)+'%'; }
+  if (az.length) {
+    si('fv-az', fm(last('acc_z'),0)); si('tr-az', trend('acc_z'));
+    document.getElementById('fb-az').style.width = barPct(last('acc_z'), CFG.imu.fields.acc_z)+'%';
+    const sd = stdev(az.slice(-20));
+    si('noise-az', sd != null ? fm(sd,1) : '—');
+  }
+  if (hist.heading.length) {
+    si('fv-hdg', fm(last('heading'),0)); si('tr-hdg', trend('heading'));
+    document.getElementById('fb-hdg').style.width = (last('heading')/360*100)+'%';
+  }
+  const lax = last('acc_x')||0, lay = last('acc_y')||0, laz = last('acc_z')||0;
+  si('v-mag', fm(Math.sqrt(lax**2+lay**2+laz**2),0));
+  si('n-imu', counts.imu);
+  si('ts-imu', lbl);
+  pushChart(Charts.imu, lbl, 'imu');
+
+  const magOk = Math.abs(Math.sqrt(lax**2+lay**2+laz**2) - 981) < 200;
+  setBadge('imu', az.length ? (magOk ? 'pass' : 'warn') : 'wait',
+    az.length ? (magOk ? '✓ PASS' : '⚠ WARN') : 'WAITING');
+}
+
+function updateAIR(d) {
+  const lbl = now();
+  ['pm1_0','pm2_5','pm10'].forEach(k => { if (d[k] != null) pushHist(k, d[k]); });
+  const last = k => hist[k].length ? hist[k][hist[k].length-1] : null;
+  const ids = {pm1_0:'pm1', pm2_5:'pm25', pm10:'pm10'};
+  const bars = {pm1_0:'fb-pm1', pm2_5:'fb-pm25', pm10:'fb-pm10'};
+  ['pm1_0','pm2_5','pm10'].forEach(k => {
+    const v = last(k); if (v == null) return;
+    si('fv-'+ids[k], fm(v,1));
+    si('tr-'+ids[k], trend(k));
+    document.getElementById(bars[k]).style.width = (v/500*100)+'%';
+    si('fr-'+ids[k], v > 150 ? '☠ HAZ' : v > 55 ? '⚠' : '✓');
+  });
+  const pm25vals = hist.pm2_5;
+  if (pm25vals.length) {
+    const avg = pm25vals.reduce((a,b)=>a+b,0)/pm25vals.length;
+    si('avg-pm25', fm(avg,1));
+    si('v-aqi', Math.round(avg*2));
+  }
+  si('n-air', counts.air);
+  si('ts-air', lbl);
+  pushChart(Charts.air, lbl, 'air');
+
+  const p = last('pm2_5');
+  const st = p == null ? 'wait' : p <= 12 ? 'pass' : p <= 55 ? 'warn' : 'fail';
+  setBadge('air', st, st === 'pass' ? '✓ GOOD' : st === 'warn' ? '⚠ MODERATE' : st === 'fail' ? '✗ UNHEALTHY' : 'WAITING');
+}
+
+function updatePWR(d) {
+  const lbl = now();
+  if (d.voltage != null) pushHist('voltage', d.voltage);
+  if (d.current != null) pushHist('current', d.current);
+  const last = k => hist[k].length ? hist[k][hist[k].length-1] : null;
+  const v = last('voltage'), i = last('current');
+  if (v != null) {
+    si('fv-volt', fm(v,2));
+    si('tr-volt', trend('voltage'));
+    document.getElementById('fb-volt').style.width = barPct(v, CFG.pwr.fields.voltage)+'%';
+    const pct = Math.max(0,Math.min(100,(v-2.5)/1.7*100));
+    si('fv-bat', fm(pct,0));
+    const bar = document.getElementById('bat-bar');
+    bar.style.width = pct+'%';
+    bar.style.background = pct > 50 ? '#00ff88' : pct > 20 ? '#ffc040' : '#ff4060';
+    si('min-volt', fm(Math.min(...hist.voltage),2));
+  }
+  if (i != null) {
+    si('fv-curr', fm(i,0));
+    si('tr-curr', trend('current'));
+    document.getElementById('fb-curr').style.width = barPct(i, CFG.pwr.fields.current)+'%';
+    si('max-curr', fm(Math.max(...hist.current),0));
+  }
+  if (v != null && i != null) si('fv-power', fm(v*i/1000, 3));
+  si('n-pwr', counts.pwr);
+  si('ts-pwr', lbl);
+  pushChart(Charts.pwr, lbl, 'pwr');
+
+  const st = v == null ? 'wait' : v < 3.0 ? 'fail' : v < 3.4 ? 'warn' : 'pass';
+  setBadge('pwr', st, st === 'pass' ? '✓ OK' : st === 'warn' ? '⚠ LOW' : st === 'fail' ? '✗ CRITICAL' : 'WAITING');
+}
+
+// ── Route incoming messages ───────────────────────────────────────────────────
+const SENSOR_MAP = {
+  BME: 'env', GPS: 'gps', IMU: 'imu', PM: 'air', PWR: 'pwr',
+};
+const UPDATERS = {
+  env: updateENV, gps: updateGPS, imu: updateIMU, air: updateAIR, pwr: updatePWR,
+};
+
+function onData(msg) {
+  totalPkts++;
+  si('total-pkts', totalPkts);
+  si('pkt-count', 'pkts: '+totalPkts);
+
+  let sensor = null;
+  if (msg.type === 'sensor') {
+    sensor = SENSOR_MAP[msg.sensor];
+  } else if (msg.type === 'telemetry') {
+    // full packet — update all sensors
+    ['env','gps','imu','air','pwr'].forEach(s => {
+      counts[s]++;
+      updateRate(s);
+    });
+    updateENV(msg); updateGPS(msg); updateIMU(msg); updateAIR(msg); updatePWR(msg);
+    addLog(msg.type, `PKT#${msg.packet_id||'?'} alt=${fm(msg.alt_baro,0)}m temp=${fm(msg.temp,1)}°C bat=${fm(msg.battery_percent,0)}%`);
+    return;
+  }
+  if (!sensor) return;
+  counts[sensor]++;
+  updateRate(sensor);
+  UPDATERS[sensor](msg);
+  const keyStr = Object.keys(msg).filter(k=>!['type','sensor','timestamp'].includes(k)).map(k=>k+'='+fm(msg[k],2)).join(' ');
+  addLog(msg.sensor||'DATA', keyStr);
+}
+
+// ── Log ───────────────────────────────────────────────────────────────────────
+const MAX_LOG = 200;
+let logCount = 0;
+function addLog(sensor, msg) {
+  const body = document.getElementById('log-body');
+  if (logCount === 0) body.innerHTML = '';
+  logCount++;
+  const row = document.createElement('div');
+  row.className = 'log-row';
+  row.innerHTML = `<span class="log-ts">${now()}</span><span class="log-sensor" style="color:var(--cyan)">${sensor}</span><span class="log-msg">${msg}</span>`;
+  body.appendChild(row);
+  if (body.children.length > MAX_LOG) body.removeChild(body.firstChild);
+  body.scrollTop = body.scrollHeight;
+}
+
+// ── Uptime ────────────────────────────────────────────────────────────────────
+setInterval(() => {
+  const s = Math.floor((Date.now()-startTs)/1000);
+  si('uptime', String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0'));
+}, 1000);
+
+// ── Export ────────────────────────────────────────────────────────────────────
+function exportReport() {
+  const rows = [['sensor','key','value']];
+  Object.entries(hist).forEach(([k,arr]) => {
+    if (!arr.length) return;
+    rows.push([k, 'last', arr[arr.length-1]]);
+    rows.push([k, 'min',  Math.min(...arr)]);
+    rows.push([k, 'max',  Math.max(...arr)]);
+    rows.push([k, 'n',    arr.length]);
+  });
+  const csv = rows.map(r=>r.join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  a.download = 'sensor_test_'+new Date().toISOString().slice(0,19).replace(/:/g,'-')+'.csv';
+  a.click();
+}
+
+// ── Clear ─────────────────────────────────────────────────────────────────────
+function clearAll() {
+  Object.keys(hist).forEach(k => hist[k] = []);
+  Object.keys(counts).forEach(k => counts[k] = 0);
+  Object.keys(rateTs).forEach(k => rateTs[k] = []);
+  totalPkts = 0;
+  si('total-pkts', 0); si('pkt-count', 'pkts: 0');
+  Object.values(Charts).forEach(c => {
+    if (!c) return;
+    c.data.labels = [];
+    c.data.datasets.forEach(d => d.data = []);
+    c.update('none');
+  });
+  ['env','gps','imu','air','pwr'].forEach(s => setBadge(s,'wait','WAITING'));
+  document.getElementById('log-body').innerHTML = '<div class="log-row"><span class="log-msg" style="color:var(--fg3)">Cleared.</span></div>';
+  logCount = 0;
+}
+
+// ── WebSocket ─────────────────────────────────────────────────────────────────
+const badge = document.getElementById('ws-badge');
+let ws, reconnT;
+
+function connect() {
+  try { ws = new WebSocket('ws://localhost:8765'); } catch(e) { return; }
+  ws.onopen = () => {
+    badge.textContent = '● CONNECTED'; badge.classList.add('on');
+    si('fbar-status', 'เชื่อมต่อแล้ว — รอข้อมูลจาก hardware');
+    clearTimeout(reconnT);
+  };
+  ws.onmessage = e => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'telemetry' || msg.type === 'sensor') onData(msg);
+    } catch(err) {}
+  };
+  ws.onclose = () => {
+    badge.textContent = '● DISCONNECTED'; badge.classList.remove('on');
+    si('fbar-status', 'ขาดการเชื่อมต่อ — รัน python server.py --port COM3');
+    reconnT = setTimeout(connect, 3000);
+  };
+  ws.onerror = () => ws && ws.close();
+}
+
+connect();
+</script>
+</body>
+</html>

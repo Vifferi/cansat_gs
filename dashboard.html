@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CanSat Ground Station</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@300;400;600;700&display=swap');
+:root{
+  --bg0:#030e1a;--bg1:#071828;--bg2:#0c2236;--bg3:#102840;
+  --fg:#cceeff;--fg2:#88bbdd;--fg3:rgba(120,180,220,0.45);
+  --cyan:#00d4ff;--cyan-dim:rgba(0,212,255,0.12);
+  --green:#00ff88;--green-dim:rgba(0,255,136,0.1);
+  --amber:#ffc040;--amber-dim:rgba(255,192,64,0.1);
+  --red:#ff4060;--red-dim:rgba(255,64,96,0.1);
+  --purple:#bb88ff;--purple-dim:rgba(187,136,255,0.1);
+  --teal:#00ffcc;
+  --border:rgba(0,180,255,0.15);--border2:rgba(0,180,255,0.28);
+  --glow:0 0 12px rgba(0,212,255,0.12);
+  --font-mono:'Share Tech Mono',monospace;
+  --font-ui:'Barlow Condensed',sans-serif;
+}
+[data-theme="light"]{
+  --bg0:#f4f8fc;--bg1:#e8f0f8;--bg2:#d8e8f4;--bg3:#c4d8ec;
+  --fg:#0a2030;--fg2:#1a3a55;--fg3:rgba(15,50,85,0.6);
+  --cyan:#005f8a;--cyan-dim:rgba(0,95,138,0.1);
+  --green:#006830;--green-dim:rgba(0,104,48,0.1);
+  --amber:#7a4e00;--amber-dim:rgba(122,78,0,0.1);
+  --red:#aa0022;--red-dim:rgba(170,0,34,0.1);
+  --purple:#5522aa;--purple-dim:rgba(85,34,170,0.1);
+  --teal:#006650;
+  --border:rgba(0,70,130,0.2);--border2:rgba(0,70,130,0.38);
+  --glow:0 2px 10px rgba(0,70,130,0.12);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:var(--font-ui);background:var(--bg0);color:var(--fg);min-height:100vh;transition:background .3s,color .3s;font-size:14px;}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,0.016) 3px,rgba(0,0,0,0.016) 4px);}
+[data-theme="light"] body::before{display:none;}
+
+/* HEADER */
+header{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:0 12px;height:46px;background:var(--bg1);border-bottom:1px solid var(--border2);position:sticky;top:0;z-index:300;}
+.logo{font-family:var(--font-mono);font-size:13px;letter-spacing:3px;color:var(--cyan);white-space:nowrap;}
+.logo em{color:var(--green);font-style:normal;}
+.logo sup{font-size:8px;color:var(--fg3);}
+.hcenter{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;}
+#ws-badge{font-family:var(--font-mono);font-size:10px;padding:3px 10px;border-radius:20px;border:1px solid var(--red);color:var(--red);letter-spacing:2px;transition:all .3s;white-space:nowrap;}
+#ws-badge.on{border-color:var(--green);color:var(--green);}
+#clock{font-family:var(--font-mono);font-size:11px;color:var(--fg3);letter-spacing:2px;}
+.hbtn{font-family:var(--font-mono);font-size:10px;letter-spacing:1px;padding:4px 12px;border-radius:4px;cursor:pointer;border:1px solid var(--border2);background:transparent;color:var(--fg2);transition:all .2s;white-space:nowrap;}
+.hbtn:hover{background:var(--border);color:var(--cyan);}
+.hbtn.g{border-color:var(--green);color:var(--green);}
+.hbtn.g:hover{background:var(--green-dim);}
+.hbtn.r{border-color:var(--red);color:var(--red);}
+.hbtn.r:hover{background:var(--red-dim);}
+.hbtn.a{border-color:var(--amber);color:var(--amber);}
+.hbtn.a:hover{background:var(--amber-dim);}
+.hbtn:disabled,.hbtn.dis{opacity:.35;pointer-events:none;}
+.rec-area{display:flex;align-items:center;gap:5px;}
+.rec-dot{width:8px;height:8px;border-radius:50%;background:var(--red);opacity:0;flex-shrink:0;}
+.rec-dot.on{opacity:1;animation:rblink 1s infinite;}
+@keyframes rblink{0%,100%{opacity:1}50%{opacity:.15}}
+#rec-time{font-family:var(--font-mono);font-size:10px;color:var(--fg3);min-width:40px;}
+#rec-bar{display:none;background:rgba(255,64,96,.07);border-bottom:1px solid rgba(255,64,96,.22);padding:3px 14px;font-family:var(--font-mono);font-size:9px;color:var(--red);letter-spacing:1px;}
+
+/* TABS */
+.tab-nav{display:flex;background:var(--bg1);border-bottom:1px solid var(--border);padding:0 12px;overflow-x:auto;}
+.tbtn{font-family:var(--font-mono);font-size:11px;letter-spacing:2px;padding:0 16px;height:38px;cursor:pointer;background:transparent;border:none;color:var(--fg3);border-bottom:2px solid transparent;transition:all .2s;white-space:nowrap;text-transform:uppercase;}
+.tbtn:hover{color:var(--fg);}
+.tbtn.act{color:var(--cyan);border-bottom-color:var(--cyan);}
+.tab-panel{display:none;padding:11px 13px;}
+.tab-panel.act{display:block;}
+
+/* STATUS BAR */
+.sbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;background:var(--bg1);border:1px solid var(--border);border-radius:7px;padding:5px 10px;margin-bottom:8px;}
+.bit{font-family:var(--font-mono);font-size:9px;letter-spacing:1px;padding:2px 8px;border-radius:3px;border:1px solid rgba(100,100,100,0.25);color:rgba(120,120,120,0.4);transition:all .3s;}
+.bit.act.asc{border-color:var(--green);color:var(--green);background:var(--green-dim);}
+.bit.act.apg{border-color:var(--cyan);color:var(--cyan);background:var(--cyan-dim);}
+.bit.act.dep{border-color:var(--amber);color:var(--amber);background:var(--amber-dim);}
+.bit.act.dsc{border-color:var(--purple);color:var(--purple);background:var(--purple-dim);}
+.bit.act.lnd{border-color:var(--red);color:var(--red);background:var(--red-dim);}
+.sright{margin-left:auto;display:flex;gap:12px;align-items:center;}
+.si{font-family:var(--font-mono);font-size:9px;color:var(--fg3);text-align:right;}
+.si strong{display:block;font-size:12px;color:var(--cyan);}
+
+/* SYS BAR */
+.sys-bar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;background:var(--bg1);border:1px solid var(--border);border-radius:7px;padding:5px 10px;margin-bottom:8px;}
+.sys-chip{font-family:var(--font-mono);font-size:9px;padding:2px 8px;border-radius:3px;border:1px solid var(--border);color:var(--fg3);}
+.sys-chip.ok{border-color:var(--green);color:var(--green);background:var(--green-dim);}
+.sys-chip.warn{border-color:var(--amber);color:var(--amber);background:var(--amber-dim);}
+.sys-chip.fail{border-color:var(--red);color:var(--red);background:var(--red-dim);}
+.sys-right{margin-left:auto;display:flex;gap:8px;align-items:center;}
+
+/* METRIC CARDS */
+.gcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:6px;margin-bottom:8px;}
+.mcard{background:var(--bg1);border:1px solid var(--border);border-radius:7px;padding:8px 10px;position:relative;overflow:hidden;box-shadow:var(--glow);}
+.mcard::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--a,var(--cyan));}
+.ml{font-size:9px;letter-spacing:2px;color:var(--fg3);margin-bottom:1px;text-transform:uppercase;}
+.mv{font-family:var(--font-mono);font-size:20px;color:var(--a,var(--cyan));line-height:1.1;}
+.mu{font-size:9px;color:var(--fg3);margin-left:2px;}
+.mst{display:flex;gap:4px;margin-top:3px;font-family:var(--font-mono);font-size:9px;flex-wrap:wrap;}
+.sv{color:var(--green);}.sn{color:var(--red);}.sa{color:var(--amber);}
+.tag-c{font-family:var(--font-mono);font-size:7px;padding:1px 4px;border-radius:2px;border:1px solid var(--teal);color:var(--teal);margin-left:2px;vertical-align:middle;}
+
+/* CHART CARDS */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;}
+@media(max-width:680px){.g2{grid-template-columns:1fr;}}
+.col{display:flex;flex-direction:column;gap:8px;}
+.cc{background:var(--bg1);border:1px solid var(--border);border-radius:7px;padding:9px;box-shadow:var(--glow);}
+.ct{font-family:var(--font-mono);font-size:9px;letter-spacing:2px;color:var(--fg3);margin-bottom:6px;text-transform:uppercase;}
+.ct small{font-size:8px;opacity:.6;}
+.cw{position:relative;height:128px;}
+
+/* 3D */
+.c3d{width:100%;border-radius:6px;overflow:hidden;background:var(--bg0);cursor:grab;border:1px solid var(--border);}
+.c3d:active{cursor:grabbing;}
+.acclg{display:flex;gap:12px;margin-top:5px;font-family:var(--font-mono);font-size:10px;}
+.lx{color:#ff4060;}.ly{color:#00ff88;}.lz{color:#bb88ff;}
+
+/* PM BARS */
+.pmr{display:flex;align-items:center;gap:6px;margin-bottom:5px;}
+.pml{font-family:var(--font-mono);font-size:10px;color:var(--fg3);width:34px;flex-shrink:0;}
+.pmt{flex:1;height:7px;background:var(--bg0);border-radius:4px;overflow:hidden;border:1px solid var(--border);}
+.pmf{height:100%;border-radius:4px;transition:width .5s;}
+.pmv{font-family:var(--font-mono);font-size:10px;color:var(--fg);width:54px;text-align:right;flex-shrink:0;}
+
+/* INFO ROWS */
+.ir{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);}
+.ir:last-child{border-bottom:none;padding-bottom:0;}
+.il{font-size:9px;letter-spacing:2px;color:var(--fg3);text-transform:uppercase;}
+.iv{font-family:var(--font-mono);font-size:12px;color:var(--fg);}
+.btrack{width:100%;height:6px;background:var(--bg0);border-radius:3px;overflow:hidden;border:1px solid var(--border);margin-top:3px;}
+.bfill{height:100%;border-radius:3px;transition:width .5s,background .4s;}
+
+/* STATS TABLE */
+.stbl{width:100%;border-collapse:collapse;font-family:var(--font-mono);font-size:11px;}
+.stbl th{padding:7px 9px;text-align:left;letter-spacing:2px;font-size:9px;background:var(--bg2);color:var(--fg3);border-bottom:1px solid var(--border2);}
+.stbl td{padding:5px 9px;border-bottom:1px solid var(--border);}
+.stbl tr:hover td{background:var(--bg2);}
+.stbl td:first-child{color:var(--fg2);}
+.tdmx{color:var(--green);}.tdmn{color:var(--red);}.tdag{color:var(--amber);}.tdsd{color:var(--purple);}.tdu{color:var(--fg3);font-size:9px;}
+
+/* EVENT LOG */
+.elog{height:130px;overflow-y:auto;font-family:var(--font-mono);font-size:10px;background:var(--bg0);border:1px solid var(--border);border-radius:5px;padding:6px;}
+.elog::-webkit-scrollbar{width:4px;}
+.elog::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
+.ev{padding:2px 0;border-bottom:1px solid rgba(255,255,255,0.04);display:flex;gap:7px;}
+.evt{color:var(--fg3);flex-shrink:0;width:60px;}
+.evm{color:var(--fg2);}
+.ev.warn .evm{color:var(--amber);}.ev.ok .evm{color:var(--green);}.ev.crit .evm{color:var(--red);}
+
+/* REPLAY */
+.replay-row{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:6px;}
+.file-lbl{font-family:var(--font-mono);font-size:10px;padding:5px 12px;border-radius:4px;cursor:pointer;border:1px solid var(--border2);background:var(--bg2);color:var(--fg2);transition:all .2s;}
+.file-lbl:hover{border-color:var(--cyan);color:var(--cyan);}
+#replay-file{display:none;}
+.rprog-wrap{width:100%;height:5px;background:var(--bg2);border-radius:3px;overflow:hidden;border:1px solid var(--border);margin-top:7px;}
+.rprog-fill{height:100%;background:var(--cyan);border-radius:3px;width:0%;transition:width .3s;}
+.rspeed{font-family:var(--font-mono);font-size:10px;background:var(--bg2);border:1px solid var(--border2);color:var(--fg2);border-radius:4px;padding:4px 8px;cursor:pointer;}
+
+/* TOAST / OVERLAY */
+#toast{position:fixed;bottom:16px;right:16px;z-index:500;background:var(--bg1);border:1px solid var(--green);color:var(--green);font-family:var(--font-mono);font-size:11px;padding:10px 16px;border-radius:7px;letter-spacing:1px;display:none;animation:fu .3s ease;box-shadow:0 4px 20px rgba(0,255,136,0.2);}
+@keyframes fu{from{transform:translateY(10px);opacity:0}to{transform:translateY(0);opacity:1}}
+#overlay{position:fixed;inset:0;z-index:400;background:rgba(3,14,26,.93);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;}
+#overlay.gone{display:none;}
+#overlay h2{font-family:var(--font-mono);font-size:15px;letter-spacing:4px;color:var(--cyan);}
+#overlay p{font-family:var(--font-mono);font-size:10px;color:var(--fg3);letter-spacing:2px;text-align:center;line-height:2.4;}
+.pr{width:50px;height:50px;border:2px solid var(--cyan);border-radius:50%;animation:pa 1.8s ease-out infinite;}
+@keyframes pa{0%{transform:scale(.7);opacity:1}100%{transform:scale(1.9);opacity:0}}
+.gap8{display:flex;flex-direction:column;gap:8px;}
+</style>
+</head>
+<body data-theme="dark">
+
+<div id="toast"></div>
+<div id="overlay">
+  <div class="pr"></div>
+  <h2>WAITING FOR SIGNAL</h2>
+  <p>รัน Python server ก่อน<br>
+    <strong style="color:var(--cyan)">python server.py --demo</strong><br>
+    หรือ <strong style="color:var(--cyan)">python server.py --port COM3</strong>
+  </p>
+</div>
+
+<header>
+  <div class="logo">⬡ CANSAT <em>GS</em> <sup>v4</sup></div>
+  <div class="hcenter">
+    <div id="clock">--:--:--</div>
+    <div id="ws-badge">● DISCONNECTED</div>
+  </div>
+  <div class="rec-area">
+    <div class="rec-dot" id="rec-dot"></div>
+    <span id="rec-time">00:00</span>
+    <button class="hbtn g" id="btn-start" onclick="startRec()">▶ START</button>
+    <button class="hbtn r dis" id="btn-stop" onclick="stopRec()">■ STOP</button>
+  </div>
+  <button class="hbtn" onclick="toggleTheme()" id="tbtn">☀ LIGHT</button>
+</header>
+
+<div id="rec-bar">⏺ RECORDING — <span id="rec-start-label">—</span> &nbsp;|&nbsp; Packets: <span id="rec-pkt-count">0</span></div>
+
+<div class="tab-nav">
+  <button class="tbtn act" onclick="goTab(0)">📡 MONITOR</button>
+  <button class="tbtn" onclick="goTab(1)">📊 ANALYSIS</button>
+</div>
+
+<!-- ══ TAB 0: MONITOR ══ -->
+<div class="tab-panel act" id="tp0">
+
+  <!-- System health bar -->
+  <div class="sys-bar">
+    <span style="font-family:var(--font-mono);font-size:9px;letter-spacing:2px;color:var(--fg3)">HEALTH</span>
+    <div class="sys-chip" id="sc-env">ENV</div>
+    <div class="sys-chip" id="sc-gps">GPS</div>
+    <div class="sys-chip" id="sc-imu">IMU</div>
+    <div class="sys-chip" id="sc-air">AIR</div>
+    <div class="sys-chip" id="sc-pwr">PWR</div>
+    <div class="sys-right">
+      <span style="font-family:var(--font-mono);font-size:9px;color:var(--fg3)">TEAM <strong id="v-team" style="color:var(--cyan)">—</strong></span>
+      <span style="font-family:var(--font-mono);font-size:9px;color:var(--fg3)">UPTIME <strong id="uptime-val" style="color:var(--fg2)">00:00</strong></span>
+      <span style="font-family:var(--font-mono);font-size:9px;color:var(--fg3)">PKTS <strong id="vtot-sys" style="color:var(--fg2)">0</strong></span>
+      <button class="hbtn" style="font-size:9px;padding:2px 8px;" onclick="clearAll()">↺ CLEAR ALL</button>
+    </div>
+  </div>
+
+  <!-- Mission status bits -->
+  <div class="sbar">
+    <span style="font-family:var(--font-mono);font-size:9px;letter-spacing:2px;color:var(--fg3)">STATUS</span>
+    <div class="bit asc" id="b-asc">ASCENT</div>
+    <div class="bit apg" id="b-apg">APOGEE</div>
+    <div class="bit dep" id="b-dep">DEPLOY</div>
+    <div class="bit dsc" id="b-dsc">DESCENT</div>
+    <div class="bit lnd" id="b-lnd">LANDED</div>
+    <div class="sright">
+      <div class="si">PACKET<strong id="vpkt">—</strong></div>
+      <div class="si">TIME<strong id="vtim">—</strong></div>
+      <div class="si">TOTAL<strong id="vtot">0</strong></div>
+    </div>
+  </div>
+
+  <!-- Metric cards -->
+  <div class="gcards">
+    <div class="mcard" style="--a:var(--cyan)"><div class="ml">Altitude</div><div class="mv"><span id="m0">—</span><span class="mu">m</span></div><div class="mst"><span class="sv">↑<span id="mx0">—</span></span><span class="sn">↓<span id="mn0">—</span></span><span class="sa">~<span id="ma0">—</span></span></div></div>
+    <div class="mcard" style="--a:var(--teal)"><div class="ml">Speed <span class="tag-c">CALC</span></div><div class="mv"><span id="m1">—</span><span class="mu">m/s</span></div><div class="mst"><span class="sv">↑<span id="mx1">—</span></span><span class="sa">~<span id="ma1">—</span></span></div></div>
+    <div class="mcard" style="--a:var(--red)"><div class="ml">Vert Accel <span class="tag-c">CALC</span></div><div class="mv"><span id="m2">—</span><span class="mu">m/s²</span></div><div class="mst"><span class="sv">↑<span id="mx2">—</span></span><span class="sn">↓<span id="mn2">—</span></span></div></div>
+    <div class="mcard" style="--a:var(--purple)"><div class="ml">|Acc| <span class="tag-c">CALC</span></div><div class="mv"><span id="m3">—</span><span class="mu">mg</span></div><div class="mst"><span class="sv">↑<span id="mx3">—</span></span></div></div>
+    <div class="mcard" style="--a:var(--green)"><div class="ml">Temperature</div><div class="mv"><span id="m4">—</span><span class="mu">°C</span></div><div class="mst"><span class="sv">↑<span id="mx4">—</span></span><span class="sn">↓<span id="mn4">—</span></span><span class="sa">~<span id="ma4">—</span></span></div></div>
+    <div class="mcard" style="--a:var(--amber)"><div class="ml">Humidity</div><div class="mv"><span id="m5">—</span><span class="mu">%</span></div><div class="mst"><span class="sv">↑<span id="mx5">—</span></span><span class="sn">↓<span id="mn5">—</span></span></div></div>
+    <div class="mcard" style="--a:var(--amber)"><div class="ml">Voltage</div><div class="mv"><span id="m6">—</span><span class="mu">V</span></div><div class="mst"><span class="sn">↓<span id="mn6">—</span></span><span class="sa">~<span id="ma6">—</span></span></div></div>
+    <div class="mcard" style="--a:#0099cc"><div class="ml">PM 2.5</div><div class="mv"><span id="m7">—</span><span class="mu">µg</span></div><div class="mst"><span class="sv">↑<span id="mx7">—</span></span><span class="sa">~<span id="ma7">—</span></span></div></div>
+    <div class="mcard" style="--a:var(--green)"><div class="ml">Battery</div><div class="mv"><span id="m8">—</span><span class="mu">%</span></div><div class="mst"><span class="sn">↓<span id="mn8">—</span></span><span class="sa">~<span id="ma8">—</span></span></div></div>
+  </div>
+
+  <!-- Charts 2-column -->
+  <div class="g2">
+    <div class="col">
+      <div class="cc"><div class="ct">▸ Altitude Profile</div><div class="cw"><canvas id="ch0"></canvas></div></div>
+      <div class="cc"><div class="ct">▸ Vertical Acceleration <small>(calc)</small></div><div class="cw"><canvas id="ch2"></canvas></div></div>
+      <div class="cc"><div class="ct">▸ Accel XYZ <small>(mg)</small></div><div class="cw"><canvas id="ch4"></canvas></div></div>
+      <div class="cc"><div class="ct">▸ PM Air Quality</div><div class="cw"><canvas id="ch6"></canvas></div></div>
+    </div>
+    <div class="col">
+      <div class="cc"><div class="ct">▸ Speed <small>(calc)</small></div><div class="cw"><canvas id="ch1"></canvas></div></div>
+      <div class="cc"><div class="ct">▸ Temperature / Humidity</div><div class="cw"><canvas id="ch3"></canvas></div></div>
+      <div class="cc"><div class="ct">▸ Voltage / Current</div><div class="cw"><canvas id="ch5"></canvas></div></div>
+    </div>
+  </div>
+
+  <!-- Bottom info row -->
+  <div class="g2">
+    <div class="col">
+      <div class="cc">
+        <div class="ct">▸ Navigation &amp; Power</div>
+        <div class="ir"><div class="il">Latitude</div><div class="iv" id="vlat">—</div></div>
+        <div class="ir"><div class="il">Longitude</div><div class="iv" id="vlon">—</div></div>
+        <div class="ir"><div class="il">Satellites</div><div class="iv" id="vsat">—</div></div>
+        <div class="ir"><div class="il">Current</div><div class="iv" id="vcurr">— mA</div></div>
+        <div class="ir"><div class="il">Power</div><div class="iv" id="vwatt">— W</div></div>
+        <div class="btrack" style="margin-top:7px"><div class="bfill" id="bfill" style="width:0%"></div></div>
+      </div>
+      <div class="cc">
+        <div class="ct">▸ Air Quality</div>
+        <div class="pmr"><div class="pml">PM1.0</div><div class="pmt"><div class="pmf" id="pb0" style="width:0%;background:var(--cyan)"></div></div><div class="pmv"><span id="pv0">—</span> µg</div></div>
+        <div class="pmr"><div class="pml">PM2.5</div><div class="pmt"><div class="pmf" id="pb1" style="width:0%;background:#0099cc"></div></div><div class="pmv"><span id="pv1">—</span> µg</div></div>
+        <div class="pmr"><div class="pml">PM10</div><div class="pmt"><div class="pmf" id="pb2" style="width:0%;background:#005577"></div></div><div class="pmv"><span id="pv2">—</span> µg</div></div>
+      </div>
+    </div>
+    <div class="cc">
+      <div class="ct">▸ Event Log</div>
+      <div class="elog" id="elog"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ TAB 1: ANALYSIS ══ -->
+<div class="tab-panel" id="tp1">
+  <div class="g2" style="margin-bottom:8px;">
+    <!-- Mission Summary -->
+    <div class="cc">
+      <div class="ct">▸ Mission Summary</div>
+      <div class="ir"><div class="il">Total Packets</div><div class="iv" id="st0">—</div></div>
+      <div class="ir"><div class="il">Duration</div><div class="iv" id="st1">—</div></div>
+      <div class="ir"><div class="il">Max Altitude</div><div class="iv" id="st2">—</div></div>
+      <div class="ir"><div class="il">Max Speed</div><div class="iv" id="st3">—</div></div>
+      <div class="ir"><div class="il">Max |Accel|</div><div class="iv" id="st4">—</div></div>
+      <div class="ir"><div class="il">Avg PM2.5</div><div class="iv" id="st5">—</div></div>
+      <div class="ir"><div class="il">Avg Temp</div><div class="iv" id="st6">—</div></div>
+      <div class="ir"><div class="il">Min Voltage</div><div class="iv" id="st7">—</div></div>
+    </div>
+
+    <!-- Export + Replay -->
+    <div class="cc">
+      <div class="ct">▸ Replay from Excel</div>
+      <div class="replay-row">
+        <input type="file" id="replay-file" accept=".xlsx" onchange="loadReplayFile(this)">
+        <label for="replay-file" class="file-lbl">📂 Load .xlsx</label>
+        <span id="replay-info" style="font-family:var(--font-mono);font-size:9px;color:var(--fg3);">No file</span>
+      </div>
+      <div class="replay-row">
+        <button class="hbtn g" onclick="replayPlay()">▶ PLAY</button>
+        <button class="hbtn" onclick="replayPause()">⏸ PAUSE</button>
+        <button class="hbtn r" onclick="replayStop()">■ STOP</button>
+        <select class="rspeed" id="replay-speed">
+          <option value="1">1×</option>
+          <option value="5" selected>5×</option>
+          <option value="20">20×</option>
+          <option value="0">MAX</option>
+        </select>
+        <span id="replay-pos-label" style="font-family:var(--font-mono);font-size:9px;color:var(--fg3);">—/—</span>
+      </div>
+      <div class="rprog-wrap"><div class="rprog-fill" id="rprog"></div></div>
+    </div>
+  </div>
+
+  <!-- Full stats table -->
+  <div class="cc" style="margin-bottom:8px;">
+    <div class="ct">▸ Full Statistics</div>
+    <div style="overflow-x:auto;">
+      <table class="stbl">
+        <thead><tr><th>PARAMETER</th><th>CURRENT</th><th class="tdmx">MAX</th><th class="tdmn">MIN</th><th class="tdag">AVG</th><th class="tdsd">STDDEV</th><th>UNIT</th></tr></thead>
+        <tbody id="stbody"><tr><td colspan="7" style="text-align:center;color:var(--fg3);padding:20px;">รอข้อมูล...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 3D Views -->
+  <div class="g2">
+    <div class="cc">
+      <div class="ct">▸ Altitude Profile <small>(full history · scroll=zoom · drag=pan · dblclick=reset)</small></div>
+      <div style="height:320px;position:relative;"><canvas id="ch_af"></canvas></div>
+    </div>
+    <div class="col">
+      <div class="cc">
+        <div class="ct">▸ Accelerometer 3D <small>(drag=rotate)</small></div>
+        <div class="c3d" id="acc3d" style="height:230px;"></div>
+        <div class="acclg">
+          <span class="lx">X: <span id="ax">—</span> mg</span>
+          <span class="ly">Y: <span id="ay">—</span> mg</span>
+          <span class="lz">Z: <span id="az">—</span> mg</span>
+          <span style="color:var(--teal);font-family:var(--font-mono);font-size:10px;">|v|: <span id="amag">—</span></span>
+        </div>
+      </div>
+      <div class="cc">
+        <div class="ct">▸ Altitude vs Speed</div>
+        <div style="height:120px;position:relative;"><canvas id="ch8"></canvas></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════════
+let totalPkts=0, isDark=true, prevPkt=null, lastStatus=-1;
+const SM={}, pkgHist=[], speedHist=[];
+let recState='idle', recStart=null, recPktCount=0;
+const startTs=Date.now();
+
+
+// Replay state
+let replayData=[], replayIdx=0, replayTimer=null, replayPlaying=false;
+
+// ══════════════════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════════════════
+function si(id,v){const e=document.getElementById(id);if(e)e.textContent=v;}
+function fm(v,d=1){return(v==null||!Number.isFinite(v))?'—':Number(v).toFixed(d);}
+function nowStr(){return new Date().toLocaleTimeString('th-TH');}
+function cv(v){return getComputedStyle(document.body).getPropertyValue(v).trim();}
+function stdev(arr){if(arr.length<2)return null;const n=arr.length,m=arr.reduce((a,b)=>a+b,0)/n;return Math.sqrt(arr.reduce((s,v)=>s+(v-m)**2,0)/(n-1));}
+
+// ══════════════════════════════════════════════════════
+// THEME
+// ══════════════════════════════════════════════════════
+function toggleTheme(){
+  isDark=!isDark;
+  document.body.dataset.theme=isDark?'dark':'light';
+  document.getElementById('tbtn').textContent=isDark?'☀ LIGHT':'🌙 DARK';
+  rebuildChartTheme();
+}
+function rebuildChartTheme(){
+  [...Object.values(C)].forEach(c=>{
+    if(!c)return;
+    const fg=cv('--fg3'),b=cv('--border');
+    if(c.options&&c.options.scales)Object.values(c.options.scales).forEach(ax=>{
+      if(ax.ticks)ax.ticks.color=fg;if(ax.grid)ax.grid.color=b;if(ax.border)ax.border.color=b;
+      if(ax.title&&ax.title.display)ax.title.color=fg;
+    });
+    c.update('none');
+  });
+}
+
+// ══════════════════════════════════════════════════════
+// TABS
+// ══════════════════════════════════════════════════════
+function goTab(i){
+  document.querySelectorAll('.tbtn').forEach((b,j)=>b.classList.toggle('act',i===j));
+  document.querySelectorAll('.tab-panel').forEach((p,j)=>p.classList.toggle('act',i===j));
+  if(i===1){
+    setTimeout(()=>{
+      if(!accR)initAcc();
+      else r3d('acc3d',accR,accC2);
+      if(C.altFull)C.altFull.resize();
+      refreshStats();
+    },60);
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// RECORDING
+// ══════════════════════════════════════════════════════
+function startRec(){
+  if(recState==='recording')return;
+  clearAll();
+  if(ws&&ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({cmd:'start_session'}));
+  recState='recording'; recStart=Date.now(); recPktCount=0;
+  document.getElementById('rec-dot').classList.add('on');
+  document.getElementById('btn-start').classList.add('dis');
+  document.getElementById('btn-stop').classList.remove('dis');
+  document.getElementById('rec-bar').style.display='block';
+  si('rec-start-label',nowStr()); si('rec-pkt-count',0);
+  showToast('⏺ Recording started — Excel จะสร้างเมื่อกด STOP');
+}
+function stopRec(){
+  if(recState!=='recording')return;
+  const s=Math.floor((Date.now()-recStart)/1000);
+  const dur=String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');
+  recState='idle'; recStart=null;
+  document.getElementById('rec-dot').classList.remove('on');
+  document.getElementById('btn-start').classList.remove('dis');
+  document.getElementById('btn-stop').classList.add('dis');
+  document.getElementById('rec-bar').style.display='none';
+  si('rec-time','00:00');
+  if(ws&&ws.readyState===WebSocket.OPEN){
+    ws.send(JSON.stringify({cmd:'stop_session'}));
+    showToast(`■ Stopped — ${dur} / ${recPktCount} pkts — กำลัง Export Excel...`,5000);
+  } else {
+    showToast(`■ Stopped — ${dur} / ${recPktCount} pkts`,5000);
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// CHARTS
+// ══════════════════════════════════════════════════════
+Chart.defaults.font.family="'Share Tech Mono',monospace";
+Chart.defaults.font.size=9;
+function cOpts(extra={}){
+  const c=cv('--fg3'),b=cv('--border');
+  return{responsive:true,maintainAspectRatio:false,animation:{duration:180},
+    plugins:{legend:{display:false}},
+    scales:{x:{ticks:{maxTicksLimit:6,color:c},grid:{color:b},border:{color:b}},
+            y:{ticks:{color:c},grid:{color:b},border:{color:b}}},...extra};
+}
+function mkC(id,ds,ex={}){
+  const el=document.getElementById(id);if(!el)return null;
+  return new Chart(el,{type:'line',data:{labels:[],datasets:ds.map(d=>({data:[],pointRadius:0,borderWidth:1.5,tension:0.35,...d}))},options:cOpts(ex)});
+}
+const MP=200;
+const LG={display:true,labels:{color:'rgba(150,200,230,0.6)',boxWidth:7,font:{size:8,family:"'Share Tech Mono',monospace"}}};
+const C={
+  alt:mkC('ch0',[{borderColor:'#00d4ff',backgroundColor:'rgba(0,212,255,0.07)',fill:true}]),
+  spd:mkC('ch1',[{borderColor:'#00ffcc',backgroundColor:'rgba(0,255,204,0.06)',fill:true}]),
+  vac:mkC('ch2',[{borderColor:'#ff4060',backgroundColor:'rgba(255,64,96,0.06)',fill:true}]),
+  env:mkC('ch3',[{label:'TEMP',borderColor:'#00ff88',yAxisID:'y'},{label:'HUM',borderColor:'#ffc040',yAxisID:'y2',borderDash:[4,2]}],
+    {plugins:{legend:LG},scales:{...cOpts().scales,y2:{position:'right',ticks:{color:'rgba(255,192,64,0.5)'},grid:{drawOnChartArea:false},border:{color:'rgba(255,192,64,0.15)'}}}}),
+  acc:mkC('ch4',[{label:'X',borderColor:'#ff4060'},{label:'Y',borderColor:'#00ff88'},{label:'Z',borderColor:'#bb88ff'}],{plugins:{legend:LG}}),
+  pwr:mkC('ch5',[{label:'V',borderColor:'#ffc040',yAxisID:'y'},{label:'mA',borderColor:'#00d4ff',yAxisID:'y2',borderDash:[4,2]}],
+    {plugins:{legend:LG},scales:{...cOpts().scales,y2:{position:'right',ticks:{color:'rgba(0,212,255,0.5)'},grid:{drawOnChartArea:false},border:{color:'rgba(0,212,255,0.15)'}}}}),
+  pm: mkC('ch6',[{label:'PM1',borderColor:'#00aadd'},{label:'PM2.5',borderColor:'#0077aa'},{label:'PM10',borderColor:'#004466'}],{plugins:{legend:LG}}),
+  altFull:mkC('ch_af',[{borderColor:'#00d4ff',backgroundColor:'rgba(0,212,255,0.07)',fill:true}]),
+  as: mkC('ch8',[{borderColor:'#00ffcc',pointRadius:2,pointBackgroundColor:'#00ffcc',tension:0,showLine:true,fill:false}],
+    {scales:{x:{...cOpts().scales.x,title:{display:true,text:'Speed (m/s)',color:'rgba(0,255,204,0.5)',font:{size:8,family:"'Share Tech Mono'"}}},
+              y:{...cOpts().scales.y,title:{display:true,text:'Alt (m)',color:'rgba(0,212,255,0.5)',font:{size:8,family:"'Share Tech Mono'"}}}}}),
+};
+// ── Axis titles ───────────────────────────────────────
+(()=>{
+  const T='Time (s)';
+  const axT=(text,col)=>({display:true,text,color:col||cv('--fg3'),font:{size:8,family:"'Share Tech Mono',monospace"}});
+  const set=(chart,x,y,y2)=>{
+    if(!chart)return;
+    if(chart.options.scales.x)chart.options.scales.x.title=axT(x);
+    if(chart.options.scales.y)chart.options.scales.y.title=axT(y);
+    if(y2&&chart.options.scales.y2)chart.options.scales.y2.title=axT(y2,chart.options.scales.y2.ticks?.color);
+  };
+  set(C.alt,    T, 'Altitude (m)');
+  set(C.spd,    T, 'Speed (m/s)');
+  set(C.vac,    T, 'Vert Accel (m/s²)');
+  set(C.env,    T, 'Temp (°C)',   'Humidity (%)');
+  set(C.acc,    T, 'Accel (mg)');
+  set(C.pwr,    T, 'Voltage (V)', 'Current (mA)');
+  set(C.pm,     T, 'PM (µg/m³)');
+  set(C.altFull,T, 'Altitude (m)');
+})();
+
+// ── Universal pan/zoom chart store ───────────────────
+const DEF_VIEW=300;
+function makePanChart(chart,nDS=1){
+  if(!chart)return null;
+  const st={labels:[],data:Array.from({length:nDS},()=>[]),panIdx:0,viewSize:DEF_VIEW};
+  function render(){
+    const n=st.labels.length;if(!n)return;
+    const view=Math.min(st.viewSize,n);
+    const s=Math.max(0,Math.min(st.panIdx,n-view));
+    chart.data.labels=st.labels.slice(s,s+view);
+    st.data.forEach((d,i)=>{if(chart.data.datasets[i])chart.data.datasets[i].data=d.slice(s,s+view);});
+    chart.update('none');
+  }
+  st.add=function(lbl,...vals){
+    this.labels.push(lbl);vals.forEach((v,i)=>this.data[i]?.push(v));
+    this.panIdx=Math.max(0,this.labels.length-this.viewSize);render();
+  };
+  st.batch=function(lbl,...vals){
+    this.labels.push(lbl);vals.forEach((v,i)=>this.data[i]?.push(v));
+  };
+  st.flush=function(){
+    this.panIdx=Math.max(0,this.labels.length-this.viewSize);render();
+  };
+  st.clear=function(){
+    this.labels=[];this.data=this.data.map(()=>[]);
+    this.panIdx=0;this.viewSize=DEF_VIEW;
+    chart.data.labels=[];chart.data.datasets.forEach(d=>d.data=[]);
+    delete chart.options.scales.y?.min;delete chart.options.scales.y?.max;
+    chart.update('none');
+  };
+  // interactions
+  const el=chart.canvas;
+  let drag=false,dragX=0,snapIdx=0;
+  el.style.cursor='crosshair';
+  el.title='scroll=zoom X · shift+scroll=zoom Y · drag=pan · dblclick=reset';
+  el.addEventListener('mousedown',e=>{drag=true;dragX=e.clientX;snapIdx=st.panIdx;el.style.cursor='grabbing';});
+  window.addEventListener('mouseup',()=>{drag=false;if(el)el.style.cursor='crosshair';});
+  el.addEventListener('mousemove',e=>{
+    if(!drag)return;
+    const n=st.labels.length;if(n<=st.viewSize)return;
+    const pxPer=Math.max(1,el.clientWidth/st.viewSize);
+    st.panIdx=Math.max(0,Math.min(n-st.viewSize,snapIdx+Math.round((dragX-e.clientX)/pxPer)));
+    render();
+  });
+  el.addEventListener('wheel',e=>{
+    e.preventDefault();
+    const n=st.labels.length;if(!n)return;
+    if(e.shiftKey){
+      const ys=chart.scales.y;if(!ys)return;
+      const f=e.deltaY>0?1.15:0.87;
+      const lo=chart.options.scales.y.min??ys.min,hi=chart.options.scales.y.max??ys.max;
+      const mid=(lo+hi)/2;
+      chart.options.scales.y.min=mid-(hi-lo)/2*f;chart.options.scales.y.max=mid+(hi-lo)/2*f;
+      chart.update('none');
+    } else {
+      const rect=el.getBoundingClientRect();
+      const ratio=(e.clientX-rect.left)/rect.width;
+      const oldV=st.viewSize;
+      st.viewSize=Math.round(Math.max(10,Math.min(n,oldV*(e.deltaY>0?1.2:0.83))));
+      st.panIdx=Math.max(0,Math.min(n-st.viewSize,Math.round(st.panIdx+ratio*(oldV-st.viewSize))));
+      render();
+    }
+  },{passive:false});
+  el.addEventListener('dblclick',()=>{
+    st.viewSize=DEF_VIEW;st.panIdx=Math.max(0,st.labels.length-DEF_VIEW);
+    delete chart.options.scales.y.min;delete chart.options.scales.y.max;render();
+  });
+  return st;
+}
+// Create stores for every chart (after chart objects exist)
+const CS={
+  alt:makePanChart(C.alt,1),  spd:makePanChart(C.spd,1),  vac:makePanChart(C.vac,1),
+  env:makePanChart(C.env,2),  acc:makePanChart(C.acc,3),  pwr:makePanChart(C.pwr,2),
+  pm:makePanChart(C.pm,3),    altFull:makePanChart(C.altFull,1),
+};
+
+// ══════════════════════════════════════════════════════
+// STATS
+// ══════════════════════════════════════════════════════
+const SDEFS=[
+  {key:'alt_baro',lbl:'Altitude',unit:'m'},{key:'temp',lbl:'Temperature',unit:'°C'},
+  {key:'humidity',lbl:'Humidity',unit:'%'},{key:'speed',lbl:'Speed (calc)',unit:'m/s'},
+  {key:'vacc',lbl:'Vert Accel',unit:'m/s²'},{key:'accel_mag',lbl:'|Accel| (calc)',unit:'mg'},
+  {key:'voltage',lbl:'Voltage',unit:'V'},
+  {key:'current',lbl:'Current',unit:'mA'},{key:'watt',lbl:'Power',unit:'W'},
+  {key:'pm1_0',lbl:'PM 1.0',unit:'µg'},{key:'pm2_5',lbl:'PM 2.5',unit:'µg'},
+  {key:'pm10',lbl:'PM 10',unit:'µg'},{key:'battery_percent',lbl:'Battery',unit:'%'},
+];
+function track(k,v){if(!SM[k])SM[k]={max:-1e9,min:1e9,sum:0,n:0,cur:0};const s=SM[k];s.cur=v;if(v>s.max)s.max=v;if(v<s.min)s.min=v;s.sum+=v;s.n++;}
+function gst(k){const s=SM[k];if(!s||s.n===0)return null;return{cur:s.cur,max:s.max,min:s.min,avg:s.sum/s.n};}
+function updateCards(){
+  const vals=[[gst('alt_baro'),0],[gst('speed'),1],[gst('vacc'),2],[gst('accel_mag'),0],
+              [gst('temp'),1],[gst('humidity'),0],[gst('voltage'),2],
+              [gst('pm2_5'),1],[gst('battery_percent'),0]];
+  vals.forEach(([s,d],i)=>{
+    if(!s)return;
+    si('m'+i,fm(s.cur,d));
+    const el_mx=document.getElementById('mx'+i),el_mn=document.getElementById('mn'+i),el_ma=document.getElementById('ma'+i);
+    if(el_mx)el_mx.textContent=fm(s.max,d);
+    if(el_mn)el_mn.textContent=fm(s.min,d);
+    if(el_ma)el_ma.textContent=fm(s.avg,d);
+  });
+}
+function refreshStats(){
+  const rows=SDEFS.map(def=>{
+    const s=gst(def.key);
+    const sd=SM[def.key]?stdev(pkgHist.map(p=>p[def.key]).filter(v=>v!=null)):null;
+    if(!s)return`<tr><td>${def.lbl}</td><td colspan="5" style="color:var(--fg3)">—</td><td class="tdu">${def.unit}</td></tr>`;
+    return`<tr><td>${def.lbl}</td><td>${fm(s.cur)}</td><td class="tdmx">${fm(s.max)}</td><td class="tdmn">${fm(s.min)}</td><td class="tdag">${fm(s.avg)}</td><td class="tdsd">${sd!=null?fm(sd,3):'—'}</td><td class="tdu">${def.unit}</td></tr>`;
+  }).join('');
+  document.getElementById('stbody').innerHTML=rows;
+  si('st0',totalPkts);
+  const as=gst('alt_baro'),ss=gst('speed'),ams=gst('accel_mag'),ps=gst('pm2_5'),ts=gst('temp'),vls=gst('voltage');
+  if(as){si('st2',fm(as.max,0)+' m');}
+  if(ss){si('st3',fm(ss.max,2)+' m/s');}
+  if(ams){si('st4',fm(ams.max,0)+' mg');}
+  if(ps){si('st5',fm(ps.avg,1)+' µg/m³');}
+  if(ts){si('st6',fm(ts.avg,1)+' °C');}
+  if(vls){si('st7',fm(vls.min,2)+' V');}
+  if(pkgHist.length>1)si('st1',(pkgHist[pkgHist.length-1].time-pkgHist[0].time).toFixed(1)+'s');
+}
+
+// ══════════════════════════════════════════════════════
+// PHYSICS
+// ══════════════════════════════════════════════════════
+const R_EARTH=6371000;
+function calcDerived(d){
+  let speed=0,vacc=0,vspeed=0;
+  if(prevPkt&&d.time>prevPkt.time){
+    const dt=d.time-prevPkt.time;
+    if(dt>0&&dt<5){
+      const gpsValid=(prevPkt.lat!==-1&&prevPkt.lon!==-1&&d.lat!==-1&&d.lon!==-1);
+      let dH=0;
+      if(gpsValid){
+        const dLat=(d.lat-prevPkt.lat)*Math.PI/180;
+        const dLon=(d.lon-prevPkt.lon)*Math.PI/180;
+        const a=Math.sin(dLat/2)**2+Math.cos(prevPkt.lat*Math.PI/180)*Math.cos(d.lat*Math.PI/180)*Math.sin(dLon/2)**2;
+        dH=R_EARTH*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+      }
+      const dV=(d.alt_baro===0||prevPkt.alt_baro===0)?0:d.alt_baro-prevPkt.alt_baro;
+      speed=Math.sqrt(dH*dH+dV*dV)/dt;
+      vspeed=dV/dt;
+      const pvs=speedHist.length>0?speedHist[speedHist.length-1].vs:0;
+      vacc=(vspeed-pvs)/dt;
+    }
+  }
+  speedHist.push({speed,vs:vspeed});
+  return{speed:Math.max(0,speed),vacc};
+}
+
+// ══════════════════════════════════════════════════════
+// EVENT LOG
+// ══════════════════════════════════════════════════════
+function logEvt(msg,type=''){
+  const log=document.getElementById('elog');
+  const d=document.createElement('div');
+  d.className=`ev ${type}`;
+  d.innerHTML=`<span class="evt">${nowStr()}</span><span class="evm">${msg}</span>`;
+  log.appendChild(d);log.scrollTop=log.scrollHeight;
+}
+function chkEvents(d){
+  const s=d.status||0;
+  if(s!==lastStatus){
+    if(s&1)logEvt('🚀 ASCENT','ok');
+    if(s&2)logEvt('🎯 APOGEE — '+d.alt_baro.toFixed(0)+'m','ok');
+    if(s&4)logEvt('🪂 DEPLOY','warn');
+    if(s&8)logEvt('⬇ DESCENT','');
+    if(s&16)logEvt('🏁 LANDED','ok');
+    lastStatus=s;
+  }
+  if(d.battery_percent<20)logEvt(`⚡ Low bat: ${d.battery_percent.toFixed(0)}%`,'crit');
+}
+
+// ══════════════════════════════════════════════════════
+// SENSOR HEALTH (chips only)
+// ══════════════════════════════════════════════════════
+function setChip(s,cls,label){
+  const el=document.getElementById('sc-'+s);
+  if(el){el.className='sys-chip'+(cls?(' '+cls):'');if(label)el.textContent=s.toUpperCase()+' '+label;}
+}
+function updateHealth(d){
+  // ENV
+  const t=d.temp;
+  if(t!=null){const st=t<-10||t>60?'fail':t<0||t>55?'warn':'ok';setChip('env',st,'');}
+  // GPS
+  const sat=d.sat!=null?d.sat:null;
+  if(sat!=null){const st=sat===0?'fail':sat<4?'warn':'ok';setChip('gps',st,'');}
+  // IMU
+  const mag=d.acc_x!=null?Math.sqrt(d.acc_x**2+d.acc_y**2+d.acc_z**2):null;
+  if(mag!=null){const st=Math.abs(mag-981)<200?'ok':'warn';setChip('imu',st,'');}
+  // AIR
+  const pm=d.pm2_5;
+  if(pm!=null){const st=pm<=12?'ok':pm<=55?'warn':'fail';setChip('air',st,'');}
+  // PWR
+  const v=d.voltage;
+  if(v!=null){const st=v<3.0?'fail':v<3.4?'warn':'ok';setChip('pwr',st,'');}
+}
+
+// ══════════════════════════════════════════════════════
+// MAIN UPDATE
+// ══════════════════════════════════════════════════════
+function doUpdate(d){
+  document.getElementById('overlay').classList.add('gone');
+  totalPkts++;
+  const der=calcDerived(d);
+  d.speed=der.speed; d.vacc=der.vacc;
+  d.accel_mag=Math.sqrt((d.acc_x||0)**2+(d.acc_y||0)**2+(d.acc_z||0)**2);
+  pkgHist.push(d); prevPkt=d;
+
+  if(d.team_id)si('v-team',d.team_id);
+
+  const sf=d.status_flags||{ascending:!!(d.status&1),apogee:!!(d.status&2),deployment:!!(d.status&4),descending:!!(d.status&8),landed:!!(d.status&16)};
+  [['b-asc','ascending'],['b-apg','apogee'],['b-dep','deployment'],['b-dsc','descending'],['b-lnd','landed']]
+    .forEach(([id,k])=>document.getElementById(id).classList.toggle('act',!!sf[k]));
+
+  si('vpkt','#'+String(d.packet_id).padStart(4,'0'));
+  si('vtim','t='+d.time.toFixed(1)+'s');
+  si('vtot',totalPkts); si('vtot-sys',totalPkts);
+
+  ['alt_baro','temp','humidity','voltage','pm1_0','pm2_5','pm10','current','watt','battery_percent','accel_mag']
+    .forEach(k=>{if(d[k]!=null)track(k,d[k]);});
+  track('speed',d.speed); track('vacc',d.vacc);
+  updateCards();
+  updateHealth(d);
+
+  si('vlat',d.lat.toFixed(6)+'°'); si('vlon',d.lon.toFixed(6)+'°'); si('vsat',d.sat+' sats');
+  si('vcurr',fm(d.current,0)+' mA');
+  const watt=d.watt!=null?d.watt:(d.voltage&&d.current?d.voltage*d.current/1000:null);
+  si('vwatt',fm(watt,3)+' W');
+  const bat=Math.min(100,Math.max(0,d.battery_percent||0));
+  const bf=document.getElementById('bfill');
+  bf.style.width=bat+'%'; bf.style.background=bat>50?'#00ff88':bat>20?'#ffc040':'#ff4060';
+
+  const pmx=Math.max(d.pm10||1,1);
+  si('pv0',fm(d.pm1_0)); si('pv1',fm(d.pm2_5)); si('pv2',fm(d.pm10));
+  document.getElementById('pb0').style.width=((d.pm1_0||0)/pmx*100)+'%';
+  document.getElementById('pb1').style.width=((d.pm2_5||0)/pmx*100)+'%';
+  document.getElementById('pb2').style.width=((d.pm10||0)/pmx*100)+'%';
+
+  const lbl=d.time.toFixed(1);
+  CS.alt.add(lbl,d.alt_baro); CS.spd.add(lbl,d.speed); CS.vac.add(lbl,d.vacc);
+  CS.env.add(lbl,d.temp,d.humidity); CS.acc.add(lbl,d.acc_x,d.acc_y,d.acc_z);
+  CS.pwr.add(lbl,d.voltage,d.current); CS.pm.add(lbl,d.pm1_0,d.pm2_5,d.pm10);
+  CS.altFull.add(lbl,d.alt_baro);
+  if(C.as){C.as.data.datasets[0].data.push({x:d.speed,y:d.alt_baro});if(C.as.data.datasets[0].data.length>MP)C.as.data.datasets[0].data.shift();C.as.update('none');}
+
+  si('ax',fm(d.acc_x,0)); si('ay',fm(d.acc_y,0)); si('az',fm(d.acc_z,0));
+  si('amag',fm(d.accel_mag,0));
+  updAcc(d.acc_x,d.acc_y,d.acc_z);
+
+  chkEvents(d);
+  if(totalPkts%10===0)refreshStats();
+  if(recState==='recording'){recPktCount++;si('rec-pkt-count',recPktCount);}
+}
+
+function loadHist(h){
+  h.forEach(d=>{
+    const der=calcDerived(d); d.speed=der.speed; d.vacc=der.vacc;
+    d.accel_mag=Math.sqrt((d.acc_x||0)**2+(d.acc_y||0)**2+(d.acc_z||0)**2);
+    pkgHist.push(d); prevPkt=d; totalPkts++;
+    const lbl=d.time.toFixed(1);
+    CS.alt.batch(lbl,d.alt_baro); CS.spd.batch(lbl,d.speed); CS.vac.batch(lbl,d.vacc);
+    CS.env.batch(lbl,d.temp,d.humidity); CS.acc.batch(lbl,d.acc_x,d.acc_y,d.acc_z);
+    CS.pwr.batch(lbl,d.voltage,d.current); CS.pm.batch(lbl,d.pm1_0,d.pm2_5,d.pm10);
+    CS.altFull.batch(lbl,d.alt_baro);
+    if(C.as)C.as.data.datasets[0].data.push({x:d.speed,y:d.alt_baro});
+    ['alt_baro','temp','humidity','voltage','pm1_0','pm2_5','pm10','current','watt','battery_percent','accel_mag']
+      .forEach(k=>{if(d[k]!=null)track(k,d[k]);});
+    track('speed',d.speed); track('vacc',d.vacc);
+    updateHealth(d);
+  });
+  si('vtot',totalPkts); si('vtot-sys',totalPkts);
+  Object.values(CS).forEach(s=>s?.flush());
+  if(C.as)C.as.update();
+  refreshStats();
+  if(h.length)si('v-team',h[h.length-1].team_id||'—');
+}
+
+// ══════════════════════════════════════════════════════
+// CLEAR ALL
+// ══════════════════════════════════════════════════════
+function clearAll(){
+  totalPkts=0; prevPkt=null; lastStatus=-1;
+  pkgHist.length=0; speedHist.length=0;
+  Object.keys(SM).forEach(k=>delete SM[k]);
+  Object.values(CS).forEach(s=>s?.clear());
+  if(C.as){C.as.data.datasets[0].data=[];C.as.update('none');}
+  ['env','gps','imu','air','pwr'].forEach(s=>setChip(s,'',''));
+  si('vtot','0'); si('vtot-sys','0'); si('v-team','—');
+  document.getElementById('elog').innerHTML='';
+  document.getElementById('stbody').innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--fg3);padding:20px;">Cleared.</td></tr>';
+  ['st0','st1','st2','st3','st4','st5','st6','st7'].forEach(id=>si(id,'—'));
+  for(let i=0;i<9;i++){si('m'+i,'—');const mx=document.getElementById('mx'+i);const mn=document.getElementById('mn'+i);const ma=document.getElementById('ma'+i);if(mx)mx.textContent='—';if(mn)mn.textContent='—';if(ma)ma.textContent='—';}
+  document.getElementById('bfill').style.width='0%';
+  showToast('↺ Cleared');
+}
+
+// ══════════════════════════════════════════════════════
+// 3D ACCELEROMETER
+// ══════════════════════════════════════════════════════
+let accS,accC2,accR,aX,aY,aZ,accDrag=false,accPrev={x:0,y:0};
+function initAcc(){
+  const el=document.getElementById('acc3d');const W=el.clientWidth,H=230;
+  accS=new THREE.Scene();accC2=new THREE.PerspectiveCamera(50,W/H,.1,1000);accC2.position.set(3,2.5,3);accC2.lookAt(0,0,0);
+  accR=new THREE.WebGLRenderer({antialias:true,alpha:true});accR.setSize(W,H);accR.setClearColor(0,0);el.appendChild(accR.domElement);
+  accS.add(new THREE.GridHelper(4,8,0x112233,0x0a1628));accS.add(new THREE.AmbientLight(0xffffff,.8));
+  function mkA(color){const g=new THREE.Group(),mat=new THREE.MeshBasicMaterial({color});const sh=new THREE.Mesh(new THREE.CylinderGeometry(.05,.05,1,8),mat);sh.position.y=.5;g.add(sh);const tp=new THREE.Mesh(new THREE.ConeGeometry(.12,.28,8),mat);tp.position.y=1.14;g.add(tp);return g;}
+  aX=mkA(0xff4060);aY=mkA(0x00ff88);aZ=mkA(0xbb88ff);accS.add(aX);accS.add(aY);accS.add(aZ);
+  const dom=accR.domElement;
+  dom.addEventListener('mousedown',e=>{accDrag=true;accPrev={x:e.clientX,y:e.clientY};});
+  window.addEventListener('mousemove',e=>{if(!accDrag)return;const sph=new THREE.Spherical().setFromVector3(accC2.position);sph.theta-=(e.clientX-accPrev.x)*.01;sph.phi=Math.max(.1,Math.min(Math.PI-.1,sph.phi+(e.clientY-accPrev.y)*.01));accC2.position.setFromSpherical(sph);accC2.lookAt(0,0,0);accPrev={x:e.clientX,y:e.clientY};});
+  (function anim(){requestAnimationFrame(anim);if(accR)accR.render(accS,accC2);})();
+}
+function updAcc(vx,vy,vz){
+  if(!aX)return;
+  function sa(arr,x,y,z){const len=Math.min(Math.max(Math.sqrt(x*x+y*y+z*z)*.0009,.08),2.2);arr.scale.set(1,len,1);const d=new THREE.Vector3(x,y,z).normalize();if(d.length()>.01)arr.setRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),d));}
+  sa(aX,vx,0,0);sa(aY,0,vy,0);sa(aZ,0,0,vz);
+}
+function r3d(id,renderer,cam){
+  if(!renderer)return;const el=document.getElementById(id);if(!el)return;
+  const W=el.clientWidth,H=parseInt(el.style.height);renderer.setSize(W,H);cam.aspect=W/H;cam.updateProjectionMatrix();
+}
+
+// ══════════════════════════════════════════════════════
+// EXPORT / TOAST
+// ══════════════════════════════════════════════════════
+function exportExcel(){
+  if(ws&&ws.readyState===WebSocket.OPEN){ws.send(JSON.stringify({cmd:'export_excel'}));showToast('⏳ Exporting...');}
+  else showToast('⚠ ยังไม่ได้เชื่อมต่อ');
+}
+function showToast(msg,ms=4000){const t=document.getElementById('toast');t.textContent=msg;t.style.display='block';setTimeout(()=>t.style.display='none',ms);}
+
+// ══════════════════════════════════════════════════════
+// REPLAY
+// ══════════════════════════════════════════════════════
+function loadReplayFile(input){
+  const file=input.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const wb=XLSX.read(e.target.result,{type:'array'});
+      const wsName=wb.SheetNames.find(n=>n.includes('Telemetry'))||wb.SheetNames[0];
+      const ws=wb.Sheets[wsName];
+      if(!ws){showToast('⚠ ไม่พบ Telemetry sheet');return;}
+      const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+      // row 0: title, row 1: raw keys (machine), row 2: display headers, row 3+: data
+      // If only 2 header rows, adjust
+      let keyRow=1, dataStart=3;
+      const r1=rows[1]||[], r2=rows[2]||[];
+      // Detect: row with 'team_id' or 'time' is the key row
+      if(r1.includes('team_id')||r1.includes('time')){keyRow=1;dataStart=3;}
+      else if(r2.includes('team_id')||r2.includes('time')){keyRow=2;dataStart=4;}
+      else{keyRow=0;dataStart=1;} // fallback: first row is keys
+      const headers=rows[keyRow];
+      const data=rows.slice(dataStart).filter(r=>r.some(v=>v!==''));
+      replayData=data.map(r=>{
+        const d={};
+        headers.forEach((h,i)=>{if(h)d[String(h).toLowerCase()]=r[i];});
+        return mapReplayRow(d);
+      });
+      replayIdx=0;
+      si('replay-info',replayData.length+' pkts');
+      si('replay-pos-label','0/'+replayData.length);
+      document.getElementById('rprog').style.width='0%';
+      showToast('📊 Loaded '+replayData.length+' packets');
+    }catch(err){showToast('⚠ Parse error: '+err.message);console.error(err);}
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function mapReplayRow(r){
+  const n=k=>{ const v=r[k]; return v===''||v==null?0:parseFloat(v)||0; };
+  const s=n('status');
+  return{
+    team_id:r['team_id']||r['team id']||'',
+    time:n('time'), packet_id:n('packet_id')||n('packet id'),
+    lat:n('lat')||n('latitude'), lon:n('lon')||n('longitude'),
+    sat:n('sat')||n('satellites'), temp:n('temp'),
+    humidity:n('humidity'), alt_baro:n('alt_baro')||n('altitude'),
+    acc_x:n('acc_x')||n('acc x'), acc_y:n('acc_y')||n('acc y'),
+    acc_z:n('acc_z')||n('acc z'), heading:n('heading'),
+    pm1_0:n('pm1_0')||n('pm1.0'), pm2_5:n('pm2_5')||n('pm2.5'),
+    pm10:n('pm10'), voltage:n('voltage'), current:n('current'),
+    watt:n('watt'), battery_percent:n('battery_percent')||n('battery'),
+    status:s,
+    status_flags:{ascending:!!(s&1),apogee:!!(s&2),deployment:!!(s&4),descending:!!(s&8),landed:!!(s&16)},
+  };
+}
+
+function replayPlay(){
+  if(!replayData.length){showToast('⚠ Load Excel ก่อน');return;}
+  if(replayPlaying)return;
+  if(replayIdx>=replayData.length){replayIdx=0;clearAll();}
+  else if(replayIdx===0)clearAll();
+  replayPlaying=true;
+  document.getElementById('overlay').classList.add('gone');
+  replayTick();
+}
+function replayTick(){
+  if(!replayPlaying||replayIdx>=replayData.length){
+    replayPlaying=false;
+    if(replayIdx>=replayData.length){showToast('⏹ Replay complete');refreshStats();}
+    return;
+  }
+  const d=replayData[replayIdx];
+  doUpdate(d);
+  const pos=replayIdx+1;
+  si('replay-pos-label',pos+'/'+replayData.length);
+  document.getElementById('rprog').style.width=(pos/replayData.length*100)+'%';
+  replayIdx++;
+  const sp=parseInt(document.getElementById('replay-speed').value);
+  let delay=sp===0?0:50;
+  if(sp>0&&replayIdx<replayData.length){
+    const dt=(replayData[replayIdx].time-replayData[replayIdx-1].time)*1000;
+    if(dt>0)delay=Math.max(0,dt/sp);
+  }
+  replayTimer=setTimeout(replayTick,delay);
+}
+function replayPause(){replayPlaying=false;clearTimeout(replayTimer);}
+function replayStop(){
+  replayPlaying=false;clearTimeout(replayTimer);replayIdx=0;
+  si('replay-pos-label','0/'+(replayData.length||0));
+  document.getElementById('rprog').style.width='0%';
+}
+
+// ══════════════════════════════════════════════════════
+// CLOCK + UPTIME + REC TIMER
+// ══════════════════════════════════════════════════════
+setInterval(()=>{
+  document.getElementById('clock').textContent=new Date().toLocaleTimeString('th-TH');
+  const s=Math.floor((Date.now()-startTs)/1000);
+  si('uptime-val',String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0'));
+  if(recState==='recording'&&recStart){const rs=Math.floor((Date.now()-recStart)/1000);si('rec-time',String(Math.floor(rs/60)).padStart(2,'0')+':'+String(rs%60).padStart(2,'0'));}
+},1000);
+
+// ══════════════════════════════════════════════════════
+// WEBSOCKET
+// ══════════════════════════════════════════════════════
+const badge=document.getElementById('ws-badge');
+let ws,reconnT;
+function connect(){
+  ws=new WebSocket('ws://localhost:8765');
+  ws.onopen=()=>{badge.textContent='● CONNECTED';badge.classList.add('on');clearTimeout(reconnT);logEvt('Connected','ok');};
+  ws.onmessage=e=>{
+    try{
+      const msg=JSON.parse(e.data);
+      document.getElementById('overlay').classList.add('gone');
+      if(msg.type==='history')loadHist(msg.data);
+      else if(msg.type==='telemetry')doUpdate(msg);
+      else if(msg.type==='sensor'){
+        // Update health chips from sensor-only messages
+        updateHealth(msg);
+        if(recState==='recording'){recPktCount++;si('rec-pkt-count',recPktCount);}
+        totalPkts++;si('vtot',totalPkts);si('vtot-sys',totalPkts);
+      }
+      else if(msg.type==='export_done'){showToast(`✅ ${msg.filename} (${msg.rows} rows)`,6000);logEvt('Exported: '+msg.filename,'ok');refreshStats();}
+      else if(msg.type==='serial_status'){
+        if(msg.connected){badge.textContent='● CONNECTED · '+msg.port;badge.classList.add('on');logEvt('Serial connected: '+msg.port,'ok');}
+        else{badge.textContent='● NO SERIAL';badge.classList.remove('on');logEvt('Serial disconnected','warn');}
+      }
+      else if(msg.type==='session_started'){logEvt('⏺ Session started at '+msg.time,'ok');}
+    }catch(err){console.warn(err);}
+  };
+  ws.onclose=()=>{badge.textContent='● RECONNECTING';badge.classList.remove('on');logEvt('Disconnected','warn');reconnT=setTimeout(connect,3000);};
+  ws.onerror=()=>ws.close();
+}
+
+window.addEventListener('resize',()=>{r3d('acc3d',accR,accC2);if(C.altFull)C.altFull.resize();});
+connect();
+</script>
+</body>
+</html>
