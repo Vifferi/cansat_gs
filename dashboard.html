@@ -251,6 +251,9 @@ header{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:0 12px;hei
     <div class="mcard" style="--a:var(--amber)"><div class="ml">Voltage</div><div class="mv"><span id="m6">—</span><span class="mu">V</span></div><div class="mst"><span class="sn">↓<span id="mn6">—</span></span><span class="sa">~<span id="ma6">—</span></span></div></div>
     <div class="mcard" style="--a:#0099cc"><div class="ml">PM 2.5</div><div class="mv"><span id="m7">—</span><span class="mu">µg</span></div><div class="mst"><span class="sv">↑<span id="mx7">—</span></span><span class="sa">~<span id="ma7">—</span></span></div></div>
     <div class="mcard" style="--a:var(--green)"><div class="ml">Battery</div><div class="mv"><span id="m8">—</span><span class="mu">%</span></div><div class="mst"><span class="sn">↓<span id="mn8">—</span></span><span class="sa">~<span id="ma8">—</span></span></div></div>
+    <div class="mcard" style="--a:var(--amber)"><div class="ml">Pitch</div><div class="mv"><span id="mc-pitch">—</span><span class="mu">°</span></div><div class="mst" style="color:var(--fg3);font-size:9px;letter-spacing:1px;">nose fwd/back</div></div>
+    <div class="mcard" style="--a:var(--amber)"><div class="ml">Roll</div><div class="mv"><span id="mc-roll">—</span><span class="mu">°</span></div><div class="mst" style="color:var(--fg3);font-size:9px;letter-spacing:1px;">side tilt</div></div>
+    <div class="mcard" id="mc-tilt-card" style="--a:var(--green)"><div class="ml">Tilt ↕</div><div class="mv"><span id="mc-tilt">—</span><span class="mu">°</span></div><div class="mst"><span id="mc-tilt-label" style="color:var(--green);font-size:9px;letter-spacing:1px;">—</span></div></div>
   </div>
 
   <!-- Charts 2-column -->
@@ -353,13 +356,19 @@ header{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:0 12px;hei
     </div>
     <div class="col">
       <div class="cc">
-        <div class="ct">▸ Accelerometer 3D <small>(drag=rotate)</small></div>
-        <div class="c3d" id="acc3d" style="height:230px;"></div>
-        <div class="acclg">
+        <div class="ct">▸ Orientation — Rocket 3D + Attitude Indicator <small>(drag 3D = rotate view)</small></div>
+        <div style="display:flex;gap:6px;align-items:flex-start;">
+          <div class="c3d" id="acc3d" style="height:230px;flex:1;min-width:0;"></div>
+          <canvas id="att-ind" width="150" height="230" style="flex-shrink:0;border-radius:6px;border:1px solid var(--border);display:block;"></canvas>
+        </div>
+        <div class="acclg" style="margin-top:5px;flex-wrap:wrap;gap:10px;">
           <span class="lx">X: <span id="ax">—</span> mg</span>
           <span class="ly">Y: <span id="ay">—</span> mg</span>
           <span class="lz">Z: <span id="az">—</span> mg</span>
-          <span style="color:var(--teal);font-family:var(--font-mono);font-size:10px;">|v|: <span id="amag">—</span></span>
+          <span style="color:var(--teal);font-family:var(--font-mono);font-size:10px;">|v|: <span id="amag">—</span> mg</span>
+          <span style="color:var(--amber);font-family:var(--font-mono);font-size:10px;">Pitch: <span id="apitch">—</span>°</span>
+          <span style="color:var(--amber);font-family:var(--font-mono);font-size:10px;">Roll: <span id="aroll">—</span>°</span>
+          <span style="color:var(--cyan);font-family:var(--font-mono);font-size:10px;">Tilt: <span id="atilt">—</span>°</span>
         </div>
       </div>
       <div class="cc">
@@ -423,6 +432,7 @@ function goTab(i){
     setTimeout(()=>{
       if(!accR)initAcc();
       else r3d('acc3d',accR,accC2);
+      initAI();
       if(C.altFull)C.altFull.resize();
       refreshStats();
     },60);
@@ -764,6 +774,7 @@ function doUpdate(d){
   si('ax',fm(d.acc_x,0)); si('ay',fm(d.acc_y,0)); si('az',fm(d.acc_z,0));
   si('amag',fm(d.accel_mag,0));
   updAcc(d.acc_x,d.acc_y,d.acc_z);
+  updOrientation(d.acc_x,d.acc_y,d.acc_z);
 
   chkEvents(d);
   if(totalPkts%10===0)refreshStats();
@@ -815,23 +826,207 @@ function clearAll(){
 // ══════════════════════════════════════════════════════
 // 3D ACCELEROMETER
 // ══════════════════════════════════════════════════════
-let accS,accC2,accR,aX,aY,aZ,accDrag=false,accPrev={x:0,y:0};
+let accS,accC2,accR,rocketGroup,accDrag=false,accPrev={x:0,y:0};
+let aiCtx=null,aiW=150,aiH=230;
 function initAcc(){
   const el=document.getElementById('acc3d');const W=el.clientWidth,H=230;
-  accS=new THREE.Scene();accC2=new THREE.PerspectiveCamera(50,W/H,.1,1000);accC2.position.set(3,2.5,3);accC2.lookAt(0,0,0);
-  accR=new THREE.WebGLRenderer({antialias:true,alpha:true});accR.setSize(W,H);accR.setClearColor(0,0);el.appendChild(accR.domElement);
-  accS.add(new THREE.GridHelper(4,8,0x112233,0x0a1628));accS.add(new THREE.AmbientLight(0xffffff,.8));
-  function mkA(color){const g=new THREE.Group(),mat=new THREE.MeshBasicMaterial({color});const sh=new THREE.Mesh(new THREE.CylinderGeometry(.05,.05,1,8),mat);sh.position.y=.5;g.add(sh);const tp=new THREE.Mesh(new THREE.ConeGeometry(.12,.28,8),mat);tp.position.y=1.14;g.add(tp);return g;}
-  aX=mkA(0xff4060);aY=mkA(0x00ff88);aZ=mkA(0xbb88ff);accS.add(aX);accS.add(aY);accS.add(aZ);
+  accS=new THREE.Scene();
+  accC2=new THREE.PerspectiveCamera(48,W/H,.1,1000);
+  accC2.position.set(3.0,2.8,3.0);accC2.lookAt(0,1.0,0);
+  accR=new THREE.WebGLRenderer({antialias:true,alpha:true});
+  accR.setSize(W,H);accR.setClearColor(0,0);accR.setPixelRatio(window.devicePixelRatio||1);
+  el.appendChild(accR.domElement);
+  accS.add(new THREE.GridHelper(4,8,0x112233,0x0a1628));
+  accS.add(new THREE.AmbientLight(0xffffff,.7));
+  const dLight=new THREE.DirectionalLight(0xaaccff,.65);dLight.position.set(3,5,2);accS.add(dLight);
+  const dLight2=new THREE.DirectionalLight(0xffeedd,.2);dLight2.position.set(-2,1,-1);accS.add(dLight2);
+  // Vertical reference line (true up) — rocket is 2.0 units = 99 cm
+  const refGeo=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0),new THREE.Vector3(0,2.6,0)]);
+  const refLine=new THREE.Line(refGeo,new THREE.LineDashedMaterial({color:0x334466,dashSize:.14,gapSize:.09,transparent:true,opacity:.5}));
+  refLine.computeLineDistances();accS.add(refLine);
+  // Height measurement annotation (1 unit = 0.495m → 2.0 units ≈ 99 cm)
+  const mPts=[
+    new THREE.Vector3(-.52,0,0),new THREE.Vector3(-.44,0,0),   // bottom tick
+    new THREE.Vector3(-.48,0,0),new THREE.Vector3(-.48,2.0,0), // vertical bar
+    new THREE.Vector3(-.52,2.0,0),new THREE.Vector3(-.44,2.0,0) // top tick
+  ];
+  accS.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(mPts),new THREE.LineBasicMaterial({color:0x446688,transparent:true,opacity:.5})));
+  const lblC=document.createElement('canvas');lblC.width=180;lblC.height=40;
+  const lblX=lblC.getContext('2d');lblX.fillStyle='#5599cc';lblX.font='bold 17px monospace';
+  lblX.textAlign='center';lblX.textBaseline='middle';lblX.fillText('99.0 cm',90,20);
+  const lblSprite=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(lblC),transparent:true}));
+  lblSprite.scale.set(.75,.17,1);lblSprite.position.set(-.78,1.0,0);accS.add(lblSprite);
+  // Rocket group — total height 2.0 units (body 1.30 + nose 0.70)
+  rocketGroup=new THREE.Group();
+  const bodyMat=new THREE.MeshPhongMaterial({color:0xaaccee,shininess:70});
+  const noseMat=new THREE.MeshPhongMaterial({color:0x00d4ff,shininess:130,emissive:0x002233});
+  const finMat=new THREE.MeshPhongMaterial({color:0x1a3a55,shininess:25});
+  const body=new THREE.Mesh(new THREE.CylinderGeometry(.13,.13,1.30,14),bodyMat);
+  body.position.y=.65;rocketGroup.add(body);
+  const nose=new THREE.Mesh(new THREE.ConeGeometry(.13,.70,14),noseMat);
+  nose.position.y=1.65;rocketGroup.add(nose);
+  for(let i=0;i<3;i++){
+    const a=i*Math.PI*2/3;
+    const fin=new THREE.Mesh(new THREE.BoxGeometry(.022,.40,.26),finMat);
+    fin.position.set(Math.cos(a)*.152,.20,Math.sin(a)*.152);rocketGroup.add(fin);
+  }
+  accS.add(rocketGroup);
   const dom=accR.domElement;
   dom.addEventListener('mousedown',e=>{accDrag=true;accPrev={x:e.clientX,y:e.clientY};});
-  window.addEventListener('mousemove',e=>{if(!accDrag)return;const sph=new THREE.Spherical().setFromVector3(accC2.position);sph.theta-=(e.clientX-accPrev.x)*.01;sph.phi=Math.max(.1,Math.min(Math.PI-.1,sph.phi+(e.clientY-accPrev.y)*.01));accC2.position.setFromSpherical(sph);accC2.lookAt(0,0,0);accPrev={x:e.clientX,y:e.clientY};});
+  window.addEventListener('mousemove',e=>{
+    if(!accDrag)return;
+    const sph=new THREE.Spherical().setFromVector3(accC2.position);
+    sph.theta-=(e.clientX-accPrev.x)*.01;
+    sph.phi=Math.max(.1,Math.min(Math.PI-.1,sph.phi+(e.clientY-accPrev.y)*.01));
+    accC2.position.setFromSpherical(sph);accC2.lookAt(0,1.0,0);
+    accPrev={x:e.clientX,y:e.clientY};
+  });
+  window.addEventListener('mouseup',()=>accDrag=false);
   (function anim(){requestAnimationFrame(anim);if(accR)accR.render(accS,accC2);})();
 }
 function updAcc(vx,vy,vz){
-  if(!aX)return;
-  function sa(arr,x,y,z){const len=Math.min(Math.max(Math.sqrt(x*x+y*y+z*z)*.0009,.08),2.2);arr.scale.set(1,len,1);const d=new THREE.Vector3(x,y,z).normalize();if(d.length()>.01)arr.setRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),d));}
-  sa(aX,vx,0,0);sa(aY,0,vy,0);sa(aZ,0,0,vz);
+  if(!rocketGroup)return;
+  // Map sensor axes to Three.js: sensor-Z (rocket long axis) → 3D-Y (up)
+  const d=new THREE.Vector3(vx,vz,vy).normalize();
+  if(d.length()>.01){
+    rocketGroup.setRotationFromQuaternion(
+      new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),d)
+    );
+  }
+}
+function updOrientation(vx,vy,vz){
+  if(vx==null||vy==null||vz==null)return;
+  const R2D=180/Math.PI;
+  const pitch=Math.atan2(vy,Math.sqrt(vx*vx+vz*vz))*R2D;
+  const roll=Math.atan2(-vx,vz)*R2D;
+  const tilt=Math.atan2(Math.sqrt(vx*vx+vy*vy),vz)*R2D;
+  // ANALYSIS tab
+  si('apitch',fm(pitch,1));si('aroll',fm(roll,1));si('atilt',fm(tilt,1));
+  // MONITOR tab metric cards
+  si('mc-pitch',fm(pitch,1));si('mc-roll',fm(roll,1));si('mc-tilt',fm(tilt,1));
+  const tiltColor=tilt<10?'var(--green)':tilt<30?'var(--amber)':'var(--red)';
+  const tiltLabel=document.getElementById('mc-tilt-label');
+  if(tiltLabel){tiltLabel.textContent=tilt<10?'STRAIGHT':tilt<30?'TILTING':'LEANING';tiltLabel.style.color=tiltColor;}
+  const tiltCard=document.getElementById('mc-tilt-card');
+  if(tiltCard)tiltCard.style.setProperty('--a',tiltColor);
+  // Attitude Indicator
+  updAI(pitch,roll,tilt);
+}
+function initAI(){
+  const c=document.getElementById('att-ind');
+  if(!c||aiCtx)return;
+  const dpr=window.devicePixelRatio||1;
+  aiW=150;aiH=230;
+  c.width=aiW*dpr;c.height=aiH*dpr;
+  c.style.width=aiW+'px';c.style.height=aiH+'px';
+  aiCtx=c.getContext('2d');
+  aiCtx.scale(dpr,dpr);
+  updAI(0,0,0);
+}
+function updAI(pitch,roll,tilt=0){
+  if(!aiCtx)return;
+  const W=aiW,H=aiH,cx=W/2,cy=H/2;
+  const r=Math.min(W,H)/2-3;
+  const R2=Math.PI/180;
+  const ps=r/50; // 50 deg fills half-height
+  aiCtx.clearRect(0,0,W,H);
+  // ── Rotated sphere (sky / earth) ──────────────────────
+  aiCtx.save();
+  aiCtx.beginPath();aiCtx.arc(cx,cy,r,0,Math.PI*2);aiCtx.clip();
+  aiCtx.translate(cx,cy);
+  aiCtx.rotate(-roll*R2);
+  const py=pitch*ps;
+  // Sky gradient
+  const sg=aiCtx.createLinearGradient(0,-r+py,0,py);
+  sg.addColorStop(0,'#0a1e52');sg.addColorStop(1,'#1f4aba');
+  aiCtx.fillStyle=sg;aiCtx.fillRect(-W*2,-H*2+py,W*4,H*2);
+  // Earth gradient
+  const eg=aiCtx.createLinearGradient(0,py,0,r+py);
+  eg.addColorStop(0,'#7a3e14');eg.addColorStop(1,'#2e1005');
+  aiCtx.fillStyle=eg;aiCtx.fillRect(-W*2,py,W*4,H*2);
+  // Pitch marks every 10°
+  for(let p=-50;p<=50;p+=10){
+    if(p===0)continue;
+    const y=py-p*ps;
+    if(Math.abs(y)>r+4)continue;
+    const maj=p%20===0;
+    const len=maj?30:18;
+    aiCtx.strokeStyle=maj?'rgba(255,255,255,0.9)':'rgba(255,255,255,0.45)';
+    aiCtx.lineWidth=maj?1.8:1;
+    aiCtx.beginPath();aiCtx.moveTo(-len,y);aiCtx.lineTo(len,y);aiCtx.stroke();
+    if(maj){
+      aiCtx.fillStyle='rgba(255,255,255,0.85)';
+      aiCtx.font='bold 9px monospace';
+      aiCtx.textAlign='right';aiCtx.fillText(Math.abs(p)+'°',-len-3,y+3);
+      aiCtx.textAlign='left'; aiCtx.fillText(Math.abs(p)+'°', len+3,y+3);
+    }
+  }
+  // Horizon line (sharp + shadow)
+  aiCtx.shadowColor='rgba(0,0,0,0.9)';aiCtx.shadowBlur=5;
+  aiCtx.strokeStyle='#ffffff';aiCtx.lineWidth=2.5;
+  aiCtx.beginPath();aiCtx.moveTo(-W*2,py);aiCtx.lineTo(W*2,py);aiCtx.stroke();
+  aiCtx.shadowBlur=0;
+  aiCtx.restore();
+  // ── Fixed aircraft wings ──────────────────────────────
+  aiCtx.save();aiCtx.translate(cx,cy);aiCtx.lineCap='round';
+  aiCtx.shadowColor='rgba(0,0,0,1)';aiCtx.shadowBlur=6;
+  aiCtx.strokeStyle='#ff9200';aiCtx.lineWidth=3;
+  aiCtx.beginPath();aiCtx.moveTo(-r*.67,0);aiCtx.lineTo(-r*.24,0);aiCtx.lineTo(-r*.24,r*.13);aiCtx.stroke();
+  aiCtx.beginPath();aiCtx.moveTo( r*.67,0);aiCtx.lineTo( r*.24,0);aiCtx.lineTo( r*.24,r*.13);aiCtx.stroke();
+  aiCtx.shadowBlur=0;
+  aiCtx.fillStyle='#ff9200';aiCtx.beginPath();aiCtx.arc(0,0,4,0,Math.PI*2);aiCtx.fill();
+  aiCtx.strokeStyle='rgba(255,146,0,0.6)';aiCtx.lineWidth=1.5;
+  aiCtx.beginPath();aiCtx.arc(0,0,9,0,Math.PI*2);aiCtx.stroke();
+  aiCtx.restore();
+  // ── Roll arc & tick marks ─────────────────────────────
+  aiCtx.save();aiCtx.translate(cx,cy);
+  // Arc background
+  aiCtx.strokeStyle='rgba(100,150,210,0.25)';aiCtx.lineWidth=5;
+  aiCtx.beginPath();aiCtx.arc(0,0,r-4,-Math.PI*.75,-Math.PI*.25);aiCtx.stroke();
+  // Tick marks
+  [-60,-45,-30,-20,-10,0,10,20,30,45,60].forEach(a=>{
+    const maj=a%30===0;
+    aiCtx.save();aiCtx.rotate((a-90)*R2);
+    aiCtx.strokeStyle=maj?'rgba(220,230,255,0.8)':'rgba(160,180,220,0.4)';
+    aiCtx.lineWidth=maj?1.5:1;
+    aiCtx.beginPath();aiCtx.moveTo(0,-(r-2));aiCtx.lineTo(0,maj?-(r-10):-(r-6));aiCtx.stroke();
+    if(maj&&a!==0){
+      aiCtx.fillStyle='rgba(200,215,240,0.75)';aiCtx.font='7px monospace';aiCtx.textAlign='center';
+      aiCtx.fillText(Math.abs(a),0,-(r-14));
+    }
+    aiCtx.restore();
+  });
+  // 0° center mark
+  aiCtx.save();aiCtx.rotate(-Math.PI/2);
+  aiCtx.strokeStyle='rgba(255,255,255,0.9)';aiCtx.lineWidth=2;
+  aiCtx.beginPath();aiCtx.moveTo(0,-(r-1));aiCtx.lineTo(0,-(r-12));aiCtx.stroke();
+  aiCtx.restore();
+  // Roll pointer (moves with roll)
+  aiCtx.rotate(-roll*R2);
+  aiCtx.shadowColor='rgba(0,0,0,0.7)';aiCtx.shadowBlur=4;
+  aiCtx.fillStyle='#ffe000';
+  aiCtx.beginPath();aiCtx.moveTo(0,-(r-1));aiCtx.lineTo(-5.5,-(r-14));aiCtx.lineTo(5.5,-(r-14));aiCtx.closePath();aiCtx.fill();
+  aiCtx.shadowBlur=0;
+  aiCtx.restore();
+  // ── Bezel (double ring) ───────────────────────────────
+  aiCtx.strokeStyle='rgba(50,90,150,0.7)';aiCtx.lineWidth=2.5;
+  aiCtx.beginPath();aiCtx.arc(cx,cy,r+1,0,Math.PI*2);aiCtx.stroke();
+  aiCtx.strokeStyle='rgba(100,160,230,0.2)';aiCtx.lineWidth=1;
+  aiCtx.beginPath();aiCtx.arc(cx,cy,r+4,0,Math.PI*2);aiCtx.stroke();
+  // ── Bottom data strip ─────────────────────────────────
+  const tc=tilt<10?'#00ff88':tilt<30?'#ffaa00':'#ff4060';
+  aiCtx.fillStyle='rgba(3,14,26,0.82)';
+  aiCtx.beginPath();
+  aiCtx.arc(cx,cy,r+1,0.08*Math.PI,0.92*Math.PI);
+  aiCtx.lineTo(cx-r,cy+r);aiCtx.lineTo(cx+r,cy+r);aiCtx.closePath();
+  aiCtx.fill();
+  aiCtx.font='bold 9px monospace';
+  aiCtx.textAlign='left'; aiCtx.fillStyle='rgba(150,190,230,0.95)';
+  aiCtx.fillText('P '+pitch.toFixed(1)+'°',cx-r+5,cy+r-5);
+  aiCtx.textAlign='center';aiCtx.fillStyle=tc;
+  aiCtx.fillText(tilt.toFixed(1)+'°',cx,cy+r-5);
+  aiCtx.textAlign='right'; aiCtx.fillStyle='rgba(150,190,230,0.95)';
+  aiCtx.fillText('R '+roll.toFixed(1)+'°',cx+r-5,cy+r-5);
 }
 function r3d(id,renderer,cam){
   if(!renderer)return;const el=document.getElementById(id);if(!el)return;

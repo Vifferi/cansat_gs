@@ -49,7 +49,8 @@ NUMERIC_FIELDS = [
     "temp","humidity","alt_baro",
     "acc_x","acc_y","acc_z","heading",
     "pm1_0","pm2_5","pm10",
-    "voltage","current","watt","battery_percent"
+    "voltage","current","watt","battery_percent",
+    "pitch","roll","tilt"
 ]
 
 CSV_FILTER = set(CSV_HEADERS) | {"timestamp"}
@@ -202,6 +203,17 @@ def compute_derived(packets: list) -> list:
                 prev_vspeed = vspeed
         d["speed"] = round(speed, 3)
         d["vacc"]  = round(vacc, 3)
+        ax = d.get("acc_x"); ay = d.get("acc_y"); az = d.get("acc_z")
+        if None not in (ax, ay, az):
+            mag = math.sqrt(ax*ax + ay*ay + az*az)
+            if mag > 10:
+                d["pitch"] = round(math.degrees(math.atan2(ay, math.sqrt(ax*ax + az*az))), 2)
+                d["roll"]  = round(math.degrees(math.atan2(-ax, az)), 2)
+                d["tilt"]  = round(math.degrees(math.atan2(math.sqrt(ax*ax + ay*ay), az)), 2)
+            else:
+                d["pitch"] = d["roll"] = d["tilt"] = None
+        else:
+            d["pitch"] = d["roll"] = d["tilt"] = None
         result.append(d)
         prev = pkt
     return result
@@ -280,6 +292,7 @@ def export_excel(filename: str = None):
         "pm1_0":"µg/m³","pm2_5":"µg/m³","pm10":"µg/m³",
         "voltage":"V","current":"mA","watt":"W","battery_percent":"%",
         "speed":"m/s","vacc":"m/s²",
+        "pitch":"°","roll":"°","tilt":"°",
     }
     labels = {
         "temp":"Temperature","humidity":"Humidity","alt_baro":"Altitude",
@@ -287,20 +300,21 @@ def export_excel(filename: str = None):
         "heading":"Heading","pm1_0":"PM 1.0","pm2_5":"PM 2.5","pm10":"PM 10",
         "voltage":"Voltage","current":"Current","watt":"Power","battery_percent":"Battery",
         "speed":"Speed (calc)","vacc":"Vert Accel (calc)",
+        "pitch":"Pitch (calc)","roll":"Roll (calc)","tilt":"Tilt (calc)",
     }
 
     # Column headers — raw CSV keys first (row 2), display names (row 3)
     export_keys = ["team_id","time","wall_clock","packet_id","lat","lon","sat",
                    "temp","humidity","alt_baro","acc_x","acc_y","acc_z","heading",
                    "pm1_0","pm2_5","pm10","voltage","current","watt","battery_percent",
-                   "status","speed","vacc"]
+                   "status","speed","vacc","pitch","roll","tilt"]
     display_headers = [
         "Team ID","Time (s)","Clock","Packet ID","Latitude","Longitude","Satellites",
         "Temp (°C)","Humidity (%)","Altitude (m)",
         "Acc X (mg)","Acc Y (mg)","Acc Z (mg)","Heading (°)",
         "PM1.0 (µg)","PM2.5 (µg)","PM10 (µg)",
         "Voltage (V)","Current (mA)","Watt (W)","Battery (%)","Status",
-        "Speed (m/s)","Vert Accel (m/s²)"
+        "Speed (m/s)","Vert Accel (m/s²)","Pitch (°)","Roll (°)","Tilt (°)"
     ]
 
     # Row 2: machine-readable keys (for replay)
@@ -341,7 +355,7 @@ def export_excel(filename: str = None):
         ws1.row_dimensions[row_idx].height = 16
 
     # Column widths
-    widths = [10,9,8,9,12,12,10, 10,11,11, 10,10,10,10, 10,10,10, 10,11,10,10,8, 10,12]
+    widths = [10,9,8,9,12,12,10, 10,11,11, 10,10,10,10, 10,10,10, 10,11,10,10,8, 10,12, 9,9,9]
     for i, w in enumerate(widths, 1):
         ws1.column_dimensions[get_column_letter(i)].width = w
 
