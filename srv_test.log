@@ -1,0 +1,6 @@
+14:44:51 [INFO] ==================================================
+14:44:51 [INFO]   CanSat Ground Station v2
+14:44:51 [INFO]   ws://localhost:8765
+14:44:51 [INFO] ==================================================
+14:44:51 [ERROR] Port 8765 is already in use — is another server.py running?
+14:44:51 [ERROR] Run:  taskkill /F /IM python.exe   then restart.
