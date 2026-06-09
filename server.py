@@ -238,17 +238,17 @@ def compute_derived(packets: list) -> list:
     """คำนวณ speed และ vacc จาก packet ที่ต่อเนื่องกัน
     Packets ที่ time กระโดดถอยหลังเกิน TIME_GLITCH_THRESHOLD จะถูก skip
     เพื่อกรอง firmware noise และตัด session ใหม่ที่ปนมา
+    vacc ใช้ acc_y โดยตรง (แกน Y ชี้ขึ้น, รวม gravity ~980 mg)
     """
     R = 6371000
     result = []
     prev = None
-    prev_vspeed = 0.0
     for pkt in packets:
         if prev and pkt["time"] < prev["time"] - TIME_GLITCH_THRESHOLD:
             log.warning(f"Time glitch: {prev['time']:.1f} → {pkt['time']:.1f} — packet skipped")
             continue
         d = dict(pkt)
-        speed, vacc = 0.0, 0.0
+        speed = 0.0
         if prev and d["time"] > prev["time"]:
             dt = d["time"] - prev["time"]
             if 0 < dt < 5:
@@ -262,12 +262,9 @@ def compute_derived(packets: list) -> list:
                 else:
                     dH = 0.0
                 dV = 0.0 if d["alt_baro"] == 0 or prev["alt_baro"] == 0 else d["alt_baro"] - prev["alt_baro"]
-                vspeed = dV / dt
-                speed  = max(0, math.sqrt(dH**2 + dV**2) / dt)
-                vacc   = (vspeed - prev_vspeed) / dt
-                prev_vspeed = vspeed
+                speed = max(0, math.sqrt(dH**2 + dV**2) / dt)
         d["speed"] = round(speed, 3)
-        d["vacc"]  = round(vacc, 3)
+        d["vacc"]  = round(d.get("acc_y") or 0.0, 3)
         ax = d.get("acc_x"); ay = d.get("acc_y"); az = d.get("acc_z")
         if None not in (ax, ay, az):
             mag = math.sqrt(ax*ax + ay*ay + az*az)

@@ -350,7 +350,7 @@ function refreshStats(){
 // ══════════════════════════════════════════════════════
 const R_EARTH=6371000;
 function calcDerived(d){
-  let speed=0,vacc=0,vspeed=0;
+  let speed=0,vspeed=0;
   if(prevPkt&&d.time>prevPkt.time){
     const dt=d.time-prevPkt.time;
     if(dt>0&&dt<5){
@@ -365,11 +365,10 @@ function calcDerived(d){
       const dV=(d.alt_baro===0||prevPkt.alt_baro===0)?0:d.alt_baro-prevPkt.alt_baro;
       speed=Math.sqrt(dH*dH+dV*dV)/dt;
       vspeed=dV/dt;
-      const pvs=speedHist.length>0?speedHist[speedHist.length-1].vs:0;
-      vacc=(vspeed-pvs)/dt;
     }
   }
   speedHist.push({speed,vs:vspeed});
+  const vacc=d.acc_y??0;
   return{speed:Math.max(0,speed),vacc};
 }
 

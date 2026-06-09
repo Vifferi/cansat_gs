@@ -68,7 +68,7 @@
 #define LORA_BW_HZ          125E3       // Main BW 125 kHz
 #define LORA_SF             11          // Main SF
 
-#define APOGEE_MIN_ALT_M    20.0f       // ต้องขึ้นไปอย่างน้อย 20m ก่อน detect apogee
+#define APOGEE_MIN_ALT_M    250.0f      // ต้องขึ้นไปอย่างน้อย 250m ก่อน detect apogee
 #define LANDED_THRESH_M     2.0f        // ถ้าต่ำกว่า 2m และไม่ขยับ = ลงจอด
 
 // Status bitmask — ตรงกับ server.py decode_status()
@@ -210,7 +210,7 @@ void parsePMS() {
 }
 
 // ─── Flight status state machine ─────────────────────────────────────────────
-int updateFlightStatus(float alt) {
+int updateFlightStatus(float alt, float acc_y) {
     float dAlt = alt - prev_alt;
 
     if (flight_status == STATUS_LANDED) return STATUS_LANDED;
@@ -219,7 +219,7 @@ int updateFlightStatus(float alt) {
 
     switch (flight_status) {
         case STATUS_ASCENDING:
-            if (peak_alt > APOGEE_MIN_ALT_M && dAlt < -0.5f) {
+            if (peak_alt > APOGEE_MIN_ALT_M && (peak_alt - alt) >= 2.0f && acc_y < 500.0f) {
                 deployServo.write(90);
                 deployed = true;
                 beepStart(200, 3);
@@ -446,7 +446,7 @@ void loop() {
 
     // ── Flight status (ใช้ alt smoothed เพื่อลด noise ก่อน detect) ──────────
     float alt_smooth = smoothAlt(alt_baro);
-    int status = updateFlightStatus(alt_smooth);
+    int status = updateFlightStatus(alt_smooth, acc_y);
     prev_alt   = alt_smooth;
 
     // ── Get GPS wall-clock time (HH:MM:SS) ────────────────────────────────────
