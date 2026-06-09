@@ -21,200 +21,229 @@
   </p>
 </div>
 
-<header>
-  <div class="logo">⬡ CANSAT <em>GS</em> <sup>v4</sup></div>
-  <div class="hcenter">
-    <div id="clock">--:--:--</div>
-    <div id="ws-badge">● DISCONNECTED</div>
-  </div>
-  <div class="rec-area">
-    <div class="rec-dot" id="rec-dot"></div>
-    <span id="rec-time">00:00</span>
-    <button class="hbtn g" id="btn-start" onclick="startRec()">▶ START</button>
-    <button class="hbtn r dis" id="btn-stop" onclick="stopRec()">■ STOP</button>
-  </div>
-  <button class="hbtn" onclick="toggleTheme()" id="tbtn">☀ LIGHT</button>
-</header>
+<div id="app">
 
-<div id="rec-bar">⏺ RECORDING — <span id="rec-start-label">—</span> &nbsp;|&nbsp; Packets: <span id="rec-pkt-count">0</span></div>
-
-<div class="tab-nav">
-  <button class="tbtn act" onclick="goTab(0)">📡 MONITOR</button>
-  <button class="tbtn" onclick="goTab(1)">📊 ANALYSIS</button>
-</div>
-
-<!-- ══ TAB 0: MONITOR ══ -->
-<div class="tab-panel act" id="tp0">
-
-  <!-- System health bar -->
-  <div class="sys-bar">
-    <span style="font-family:var(--font-mono);font-size:9px;letter-spacing:2px;color:var(--fg3)">HEALTH</span>
-    <div class="sys-chip" id="sc-env">ENV</div>
-    <div class="sys-chip" id="sc-gps">GPS</div>
-    <div class="sys-chip" id="sc-imu">IMU</div>
-    <div class="sys-chip" id="sc-air">AIR</div>
-    <div class="sys-chip" id="sc-pwr">PWR</div>
-    <div class="sys-right">
-      <span style="font-family:var(--font-mono);font-size:9px;color:var(--fg3)">TEAM <strong id="v-team" style="color:var(--cyan)">—</strong></span>
-      <span style="font-family:var(--font-mono);font-size:9px;color:var(--fg3)">UPTIME <strong id="uptime-val" style="color:var(--fg2)">00:00</strong></span>
-      <span style="font-family:var(--font-mono);font-size:9px;color:var(--fg3)">PKTS <strong id="vtot-sys" style="color:var(--fg2)">0</strong></span>
-      <button class="hbtn" style="font-size:9px;padding:2px 8px;" onclick="clearAll()">↺ CLEAR ALL</button>
+  <!-- ══ SIDEBAR ══ -->
+  <nav id="sidebar">
+    <div class="sb-brand">⬡ CANSAT <em>GS</em> <sup>v4</sup></div>
+    <div class="sb-nav-wrap">
+      <div class="sb-sec-lbl">NAVIGATION</div>
+      <button class="tbtn act" onclick="goTab(0)">📡 Monitor</button>
+      <button class="tbtn" onclick="goTab(1)">📊 Analysis</button>
     </div>
-  </div>
-
-  <!-- Mission status bits -->
-  <div class="sbar">
-    <span style="font-family:var(--font-mono);font-size:9px;letter-spacing:2px;color:var(--fg3)">STATUS</span>
-    <div class="bit asc" id="b-asc">ASCENT</div>
-    <div class="bit apg" id="b-apg">APOGEE</div>
-    <div class="bit dep" id="b-dep">DEPLOY</div>
-    <div class="bit dsc" id="b-dsc">DESCENT</div>
-    <div class="bit lnd" id="b-lnd">LANDED</div>
-    <div class="sright">
-      <div class="si">PACKET<strong id="vpkt">—</strong></div>
-      <div class="si">TIME<strong id="vtim">—</strong></div>
-      <div class="si">TOTAL<strong id="vtot">0</strong></div>
+    <div class="sb-btm">
+      <button class="hbtn sb-theme-btn" onclick="toggleTheme()" id="tbtn">☀ LIGHT</button>
+      <div class="sb-version">CanSat GS · v4</div>
     </div>
-  </div>
+  </nav>
 
-  <!-- Metric cards -->
-  <div class="gcards">
-    <div class="mcard" style="--a:var(--cyan)"><div class="ml">Altitude</div><div class="mv"><span id="m0">—</span><span class="mu">m</span></div><div class="mst"><span class="sv">↑<span id="mx0">—</span></span><span class="sn">↓<span id="mn0">—</span></span><span class="sa">~<span id="ma0">—</span></span></div></div>
-    <div class="mcard" style="--a:var(--teal)"><div class="ml">Speed <span class="tag-c">CALC</span></div><div class="mv"><span id="m1">—</span><span class="mu">m/s</span></div><div class="mst"><span class="sv">↑<span id="mx1">—</span></span><span class="sa">~<span id="ma1">—</span></span></div></div>
-    <div class="mcard" style="--a:var(--red)"><div class="ml">Vert Accel <span class="tag-c">CALC</span></div><div class="mv"><span id="m2">—</span><span class="mu">m/s²</span></div><div class="mst"><span class="sv">↑<span id="mx2">—</span></span><span class="sn">↓<span id="mn2">—</span></span></div></div>
-    <div class="mcard" style="--a:var(--purple)"><div class="ml">|Acc| <span class="tag-c">CALC</span></div><div class="mv"><span id="m3">—</span><span class="mu">mg</span></div><div class="mst"><span class="sv">↑<span id="mx3">—</span></span></div></div>
-    <div class="mcard" style="--a:var(--green)"><div class="ml">Temperature</div><div class="mv"><span id="m4">—</span><span class="mu">°C</span></div><div class="mst"><span class="sv">↑<span id="mx4">—</span></span><span class="sn">↓<span id="mn4">—</span></span><span class="sa">~<span id="ma4">—</span></span></div></div>
-    <div class="mcard" style="--a:var(--amber)"><div class="ml">Humidity</div><div class="mv"><span id="m5">—</span><span class="mu">%</span></div><div class="mst"><span class="sv">↑<span id="mx5">—</span></span><span class="sn">↓<span id="mn5">—</span></span></div></div>
-    <div class="mcard" style="--a:var(--amber)"><div class="ml">Voltage</div><div class="mv"><span id="m6">—</span><span class="mu">V</span></div><div class="mst"><span class="sn">↓<span id="mn6">—</span></span><span class="sa">~<span id="ma6">—</span></span></div></div>
-    <div class="mcard" style="--a:#0099cc"><div class="ml">PM 2.5</div><div class="mv"><span id="m7">—</span><span class="mu">µg</span></div><div class="mst"><span class="sv">↑<span id="mx7">—</span></span><span class="sa">~<span id="ma7">—</span></span></div></div>
-    <div class="mcard" style="--a:var(--green)"><div class="ml">Battery</div><div class="mv"><span id="m8">—</span><span class="mu">%</span></div><div class="mst"><span class="sn">↓<span id="mn8">—</span></span><span class="sa">~<span id="ma8">—</span></span></div></div>
-    <div class="mcard" style="--a:var(--amber)"><div class="ml">Pitch</div><div class="mv"><span id="mc-pitch">—</span><span class="mu">°</span></div><div class="mst" style="color:var(--fg3);font-size:9px;letter-spacing:1px;">nose fwd/back</div></div>
-    <div class="mcard" style="--a:var(--amber)"><div class="ml">Roll</div><div class="mv"><span id="mc-roll">—</span><span class="mu">°</span></div><div class="mst" style="color:var(--fg3);font-size:9px;letter-spacing:1px;">side tilt</div></div>
-    <div class="mcard" id="mc-tilt-card" style="--a:var(--green)"><div class="ml">Tilt ↕</div><div class="mv"><span id="mc-tilt">—</span><span class="mu">°</span></div><div class="mst"><span id="mc-tilt-label" style="color:var(--green);font-size:9px;letter-spacing:1px;">—</span></div></div>
-  </div>
+  <!-- ══ MAIN COLUMN ══ -->
+  <div id="main-col">
 
-  <!-- Charts 2-column -->
-  <div class="g2">
-    <div class="col">
-      <div class="cc"><div class="ct">▸ Altitude Profile</div><div class="cw"><canvas id="ch0"></canvas></div></div>
-      <div class="cc"><div class="ct">▸ Vertical Acceleration <small>(calc)</small></div><div class="cw"><canvas id="ch2"></canvas></div></div>
-      <div class="cc"><div class="ct">▸ Accel XYZ <small>(mg)</small></div><div class="cw"><canvas id="ch4"></canvas></div></div>
-      <div class="cc"><div class="ct">▸ PM Air Quality</div><div class="cw"><canvas id="ch6"></canvas></div></div>
-    </div>
-    <div class="col">
-      <div class="cc"><div class="ct">▸ Speed <small>(calc)</small></div><div class="cw"><canvas id="ch1"></canvas></div></div>
-      <div class="cc"><div class="ct">▸ Temperature / Humidity</div><div class="cw"><canvas id="ch3"></canvas></div></div>
-      <div class="cc"><div class="ct">▸ Voltage / Current</div><div class="cw"><canvas id="ch5"></canvas></div></div>
-    </div>
-  </div>
-
-  <!-- Bottom info row -->
-  <div class="g2">
-    <div class="col">
-      <div class="cc">
-        <div class="ct">▸ Navigation &amp; Power</div>
-        <div class="ir"><div class="il">Latitude</div><div class="iv" id="vlat">—</div></div>
-        <div class="ir"><div class="il">Longitude</div><div class="iv" id="vlon">—</div></div>
-        <div class="ir"><div class="il">Satellites</div><div class="iv" id="vsat">—</div></div>
-        <div class="ir"><div class="il">Current</div><div class="iv" id="vcurr">— mA</div></div>
-        <div class="ir"><div class="il">Power</div><div class="iv" id="vwatt">— W</div></div>
-        <div class="btrack" style="margin-top:7px"><div class="bfill" id="bfill" style="width:0%"></div></div>
+    <header>
+      <div class="hcenter" style="flex:1">
+        <div id="clock">--:--:--</div>
+        <div id="ws-badge">● DISCONNECTED</div>
       </div>
-      <div class="cc">
-        <div class="ct">▸ Air Quality</div>
-        <div class="pmr"><div class="pml">PM1.0</div><div class="pmt"><div class="pmf" id="pb0" style="width:0%;background:var(--cyan)"></div></div><div class="pmv"><span id="pv0">—</span> µg</div></div>
-        <div class="pmr"><div class="pml">PM2.5</div><div class="pmt"><div class="pmf" id="pb1" style="width:0%;background:#0099cc"></div></div><div class="pmv"><span id="pv1">—</span> µg</div></div>
-        <div class="pmr"><div class="pml">PM10</div><div class="pmt"><div class="pmf" id="pb2" style="width:0%;background:#005577"></div></div><div class="pmv"><span id="pv2">—</span> µg</div></div>
+      <div class="rec-area">
+        <div class="rec-dot" id="rec-dot"></div>
+        <span id="rec-time">00:00</span>
+        <button class="hbtn g" id="btn-start" onclick="startRec()">▶ START</button>
+        <button class="hbtn r dis" id="btn-stop" onclick="stopRec()">■ STOP</button>
       </div>
+    </header>
+
+    <div id="rec-bar">⏺ RECORDING — <span id="rec-start-label">—</span> &nbsp;|&nbsp; Packets: <span id="rec-pkt-count">0</span></div>
+
+    <!-- ══ TAB 0: MONITOR ══ -->
+    <div class="tab-panel act" id="tp0">
+
+      <!-- Mission status bits -->
+      <div class="sbar">
+        <span style="font-family:var(--font-mono);font-size:9px;letter-spacing:2px;color:var(--fg3)">STATUS</span>
+        <div class="bit asc" id="b-asc">ASCENT</div>
+        <div class="bit apg" id="b-apg">APOGEE</div>
+        <div class="bit dep" id="b-dep">DEPLOY</div>
+        <div class="bit dsc" id="b-dsc">DESCENT</div>
+        <div class="bit lnd" id="b-lnd">LANDED</div>
+        <div class="sright">
+          <div class="si">PACKET<strong id="vpkt">—</strong></div>
+          <div class="si">TIME<strong id="vtim">—</strong></div>
+          <div class="si">TOTAL<strong id="vtot">0</strong></div>
+        </div>
+      </div>
+
+      <!-- Metric cards -->
+      <div class="gcards">
+        <div class="mcard" style="--a:var(--cyan)"><div class="ml">Altitude</div><div class="mv"><span id="m0">—</span><span class="mu">m</span></div><div class="mst"><span class="sv">↑<span id="mx0">—</span></span><span class="sn">↓<span id="mn0">—</span></span><span class="sa">~<span id="ma0">—</span></span></div></div>
+        <div class="mcard" style="--a:var(--teal)"><div class="ml">Speed <span class="tag-c">CALC</span></div><div class="mv"><span id="m1">—</span><span class="mu">m/s</span></div><div class="mst"><span class="sv">↑<span id="mx1">—</span></span><span class="sa">~<span id="ma1">—</span></span></div></div>
+        <div class="mcard" style="--a:var(--red)"><div class="ml">Vert Accel <span class="tag-c">CALC</span></div><div class="mv"><span id="m2">—</span><span class="mu">m/s²</span></div><div class="mst"><span class="sv">↑<span id="mx2">—</span></span><span class="sn">↓<span id="mn2">—</span></span></div></div>
+        <div class="mcard" style="--a:var(--purple)"><div class="ml">|Acc| <span class="tag-c">CALC</span></div><div class="mv"><span id="m3">—</span><span class="mu">mg</span></div><div class="mst"><span class="sv">↑<span id="mx3">—</span></span></div></div>
+        <div class="mcard" style="--a:var(--green)"><div class="ml">Temperature</div><div class="mv"><span id="m4">—</span><span class="mu">°C</span></div><div class="mst"><span class="sv">↑<span id="mx4">—</span></span><span class="sn">↓<span id="mn4">—</span></span><span class="sa">~<span id="ma4">—</span></span></div></div>
+        <div class="mcard" style="--a:var(--amber)"><div class="ml">Humidity</div><div class="mv"><span id="m5">—</span><span class="mu">%</span></div><div class="mst"><span class="sv">↑<span id="mx5">—</span></span><span class="sn">↓<span id="mn5">—</span></span></div></div>
+        <div class="mcard" style="--a:var(--amber)"><div class="ml">Voltage</div><div class="mv"><span id="m6">—</span><span class="mu">V</span></div><div class="mst"><span class="sn">↓<span id="mn6">—</span></span><span class="sa">~<span id="ma6">—</span></span></div></div>
+        <div class="mcard" style="--a:#0099cc"><div class="ml">PM 2.5</div><div class="mv"><span id="m7">—</span><span class="mu">µg</span></div><div class="mst"><span class="sv">↑<span id="mx7">—</span></span><span class="sa">~<span id="ma7">—</span></span></div></div>
+        <div class="mcard" style="--a:var(--green)"><div class="ml">Battery</div><div class="mv"><span id="m8">—</span><span class="mu">%</span></div><div class="mst"><span class="sn">↓<span id="mn8">—</span></span><span class="sa">~<span id="ma8">—</span></span></div></div>
+        <div class="mcard" style="--a:var(--amber)"><div class="ml">Pitch</div><div class="mv"><span id="mc-pitch">—</span><span class="mu">°</span></div><div class="mst" style="color:var(--fg3);font-size:9px;letter-spacing:1px;">nose fwd/back</div></div>
+        <div class="mcard" style="--a:var(--amber)"><div class="ml">Roll</div><div class="mv"><span id="mc-roll">—</span><span class="mu">°</span></div><div class="mst" style="color:var(--fg3);font-size:9px;letter-spacing:1px;">side tilt</div></div>
+        <div class="mcard" id="mc-tilt-card" style="--a:var(--green)"><div class="ml">Tilt ↕</div><div class="mv"><span id="mc-tilt">—</span><span class="mu">°</span></div><div class="mst"><span id="mc-tilt-label" style="color:var(--green);font-size:9px;letter-spacing:1px;">—</span></div></div>
+      </div>
+
+      <!-- Charts 2-column -->
+      <div class="g2">
+        <div class="col">
+          <div class="cc"><div class="ct">▸ Altitude Profile</div><div class="cw"><canvas id="ch0"></canvas></div></div>
+          <div class="cc"><div class="ct">▸ Vertical Acceleration <small>(calc)</small></div><div class="cw"><canvas id="ch2"></canvas></div></div>
+          <div class="cc"><div class="ct">▸ Accel XYZ <small>(mg)</small></div><div class="cw"><canvas id="ch4"></canvas></div></div>
+          <div class="cc"><div class="ct">▸ PM Air Quality</div><div class="cw"><canvas id="ch6"></canvas></div></div>
+        </div>
+        <div class="col">
+          <div class="cc"><div class="ct">▸ Speed <small>(calc)</small></div><div class="cw"><canvas id="ch1"></canvas></div></div>
+          <div class="cc"><div class="ct">▸ Temperature / Humidity</div><div class="cw"><canvas id="ch3"></canvas></div></div>
+          <div class="cc"><div class="ct">▸ Voltage / Current</div><div class="cw"><canvas id="ch5"></canvas></div></div>
+        </div>
+      </div>
+
+    </div><!-- end tp0 -->
+
+    <!-- ══ TAB 1: ANALYSIS ══ -->
+    <div class="tab-panel" id="tp1">
+      <div class="g2" style="margin-bottom:8px;">
+        <!-- Mission Summary -->
+        <div class="cc">
+          <div class="ct">▸ Mission Summary</div>
+          <div class="ir"><div class="il">Total Packets</div><div class="iv" id="st0">—</div></div>
+          <div class="ir"><div class="il">Duration</div><div class="iv" id="st1">—</div></div>
+          <div class="ir"><div class="il">Max Altitude</div><div class="iv" id="st2">—</div></div>
+          <div class="ir"><div class="il">Max Speed</div><div class="iv" id="st3">—</div></div>
+          <div class="ir"><div class="il">Max |Accel|</div><div class="iv" id="st4">—</div></div>
+          <div class="ir"><div class="il">Avg PM2.5</div><div class="iv" id="st5">—</div></div>
+          <div class="ir"><div class="il">Avg Temp</div><div class="iv" id="st6">—</div></div>
+          <div class="ir"><div class="il">Min Voltage</div><div class="iv" id="st7">—</div></div>
+        </div>
+
+        <!-- Export + Replay -->
+        <div class="cc">
+          <div class="ct">▸ Replay from Excel</div>
+          <div class="replay-row">
+            <input type="file" id="replay-file" accept=".xlsx" onchange="loadReplayFile(this)">
+            <label for="replay-file" class="file-lbl">📂 Load .xlsx</label>
+            <span id="replay-info" style="font-family:var(--font-mono);font-size:9px;color:var(--fg3);">No file</span>
+          </div>
+          <div class="replay-row">
+            <button class="hbtn g" onclick="replayPlay()">▶ PLAY</button>
+            <button class="hbtn" onclick="replayPause()">⏸ PAUSE</button>
+            <button class="hbtn r" onclick="replayStop()">■ STOP</button>
+            <select class="rspeed" id="replay-speed">
+              <option value="1">1×</option>
+              <option value="5" selected>5×</option>
+              <option value="20">20×</option>
+              <option value="0">MAX</option>
+            </select>
+            <span id="replay-pos-label" style="font-family:var(--font-mono);font-size:9px;color:var(--fg3);">—/—</span>
+          </div>
+          <div class="rprog-wrap"><div class="rprog-fill" id="rprog"></div></div>
+        </div>
+      </div>
+
+      <!-- Full stats table -->
+      <div class="cc" style="margin-bottom:8px;">
+        <div class="ct">▸ Full Statistics</div>
+        <div style="overflow-x:auto;">
+          <table class="stbl">
+            <thead><tr><th>PARAMETER</th><th>CURRENT</th><th class="tdmx">MAX</th><th class="tdmn">MIN</th><th class="tdag">AVG</th><th class="tdsd">STDDEV</th><th>UNIT</th></tr></thead>
+            <tbody id="stbody"><tr><td colspan="7" style="text-align:center;color:var(--fg3);padding:20px;">รอข้อมูล...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 3D Views -->
+      <div class="g2">
+        <div class="cc">
+          <div class="ct">▸ Altitude Profile <small>(full history · scroll=zoom · drag=pan · dblclick=reset)</small></div>
+          <div style="height:320px;position:relative;"><canvas id="ch_af"></canvas></div>
+        </div>
+        <div class="col">
+          <div class="cc">
+            <div class="ct">▸ Orientation — Rocket 3D + Attitude Indicator <small>(drag 3D = rotate view)</small></div>
+            <div style="display:flex;gap:6px;align-items:flex-start;">
+              <div class="c3d" id="acc3d" style="height:230px;flex:1;min-width:0;"></div>
+              <canvas id="att-ind" width="150" height="230" style="flex-shrink:0;border-radius:6px;border:1px solid var(--border);display:block;"></canvas>
+            </div>
+            <div class="acclg" style="margin-top:5px;flex-wrap:wrap;gap:10px;">
+              <span class="lx">X: <span id="ax">—</span> mg</span>
+              <span class="ly">Y: <span id="ay">—</span> mg</span>
+              <span class="lz">Z: <span id="az">—</span> mg</span>
+              <span style="color:var(--teal);font-family:var(--font-mono);font-size:10px;">|v|: <span id="amag">—</span> mg</span>
+              <span style="color:var(--amber);font-family:var(--font-mono);font-size:10px;">Pitch: <span id="apitch">—</span>°</span>
+              <span style="color:var(--amber);font-family:var(--font-mono);font-size:10px;">Roll: <span id="aroll">—</span>°</span>
+              <span style="color:var(--cyan);font-family:var(--font-mono);font-size:10px;">Tilt: <span id="atilt">—</span>°</span>
+            </div>
+          </div>
+          <div class="cc">
+            <div class="ct">▸ Altitude vs Speed</div>
+            <div style="height:120px;position:relative;"><canvas id="ch8"></canvas></div>
+          </div>
+        </div>
+      </div>
+    </div><!-- end tp1 -->
+
+  </div><!-- end #main-col -->
+
+  <!-- ══ RIGHT PANEL ══ -->
+  <aside id="rpanel">
+
+    <!-- System Health -->
+    <div class="rp-sec">
+      <div class="rp-hdr">SYSTEM HEALTH</div>
+      <div class="rp-chips">
+        <div class="sys-chip" id="sc-env">ENV</div>
+        <div class="sys-chip" id="sc-gps">GPS</div>
+        <div class="sys-chip" id="sc-imu">IMU</div>
+        <div class="sys-chip" id="sc-air">AIR</div>
+        <div class="sys-chip" id="sc-pwr">PWR</div>
+      </div>
+      <div class="rp-meta">
+        <span class="rp-kv">TEAM <strong id="v-team" style="color:var(--cyan)">—</strong></span>
+        <span class="rp-kv">UP <strong id="uptime-val" style="color:var(--fg2)">00:00</strong></span>
+        <span class="rp-kv">PKT <strong id="vtot-sys" style="color:var(--fg2)">0</strong></span>
+      </div>
+      <button class="hbtn rp-clear-btn" onclick="clearAll()">↺ CLEAR ALL</button>
     </div>
-    <div class="cc">
-      <div class="ct">▸ Event Log</div>
+
+    <!-- GPS / Navigation -->
+    <div class="rp-sec">
+      <div class="rp-hdr">GPS / NAVIGATION</div>
+      <div class="ir"><div class="il">Latitude</div><div class="iv" id="vlat">—</div></div>
+      <div class="ir"><div class="il">Longitude</div><div class="iv" id="vlon">—</div></div>
+      <div class="ir"><div class="il">Satellites</div><div class="iv" id="vsat">—</div></div>
+    </div>
+
+    <!-- Power -->
+    <div class="rp-sec">
+      <div class="rp-hdr">POWER</div>
+      <div class="ir"><div class="il">Current</div><div class="iv" id="vcurr">— mA</div></div>
+      <div class="ir"><div class="il">Power</div><div class="iv" id="vwatt">— W</div></div>
+      <div class="btrack" style="margin-top:7px"><div class="bfill" id="bfill" style="width:0%"></div></div>
+    </div>
+
+    <!-- Air Quality -->
+    <div class="rp-sec">
+      <div class="rp-hdr">AIR QUALITY</div>
+      <div class="pmr"><div class="pml">PM1.0</div><div class="pmt"><div class="pmf" id="pb0" style="width:0%;background:var(--cyan)"></div></div><div class="pmv"><span id="pv0">—</span> µg</div></div>
+      <div class="pmr"><div class="pml">PM2.5</div><div class="pmt"><div class="pmf" id="pb1" style="width:0%;background:#0099cc"></div></div><div class="pmv"><span id="pv1">—</span> µg</div></div>
+      <div class="pmr"><div class="pml">PM10</div><div class="pmt"><div class="pmf" id="pb2" style="width:0%;background:#005577"></div></div><div class="pmv"><span id="pv2">—</span> µg</div></div>
+    </div>
+
+    <!-- Event Log -->
+    <div class="rp-sec rp-log-sec">
+      <div class="rp-hdr">EVENT LOG</div>
       <div class="elog" id="elog"></div>
     </div>
-  </div>
-</div>
 
-<!-- ══ TAB 1: ANALYSIS ══ -->
-<div class="tab-panel" id="tp1">
-  <div class="g2" style="margin-bottom:8px;">
-    <!-- Mission Summary -->
-    <div class="cc">
-      <div class="ct">▸ Mission Summary</div>
-      <div class="ir"><div class="il">Total Packets</div><div class="iv" id="st0">—</div></div>
-      <div class="ir"><div class="il">Duration</div><div class="iv" id="st1">—</div></div>
-      <div class="ir"><div class="il">Max Altitude</div><div class="iv" id="st2">—</div></div>
-      <div class="ir"><div class="il">Max Speed</div><div class="iv" id="st3">—</div></div>
-      <div class="ir"><div class="il">Max |Accel|</div><div class="iv" id="st4">—</div></div>
-      <div class="ir"><div class="il">Avg PM2.5</div><div class="iv" id="st5">—</div></div>
-      <div class="ir"><div class="il">Avg Temp</div><div class="iv" id="st6">—</div></div>
-      <div class="ir"><div class="il">Min Voltage</div><div class="iv" id="st7">—</div></div>
-    </div>
+  </aside><!-- end #rpanel -->
 
-    <!-- Export + Replay -->
-    <div class="cc">
-      <div class="ct">▸ Replay from Excel</div>
-      <div class="replay-row">
-        <input type="file" id="replay-file" accept=".xlsx" onchange="loadReplayFile(this)">
-        <label for="replay-file" class="file-lbl">📂 Load .xlsx</label>
-        <span id="replay-info" style="font-family:var(--font-mono);font-size:9px;color:var(--fg3);">No file</span>
-      </div>
-      <div class="replay-row">
-        <button class="hbtn g" onclick="replayPlay()">▶ PLAY</button>
-        <button class="hbtn" onclick="replayPause()">⏸ PAUSE</button>
-        <button class="hbtn r" onclick="replayStop()">■ STOP</button>
-        <select class="rspeed" id="replay-speed">
-          <option value="1">1×</option>
-          <option value="5" selected>5×</option>
-          <option value="20">20×</option>
-          <option value="0">MAX</option>
-        </select>
-        <span id="replay-pos-label" style="font-family:var(--font-mono);font-size:9px;color:var(--fg3);">—/—</span>
-      </div>
-      <div class="rprog-wrap"><div class="rprog-fill" id="rprog"></div></div>
-    </div>
-  </div>
-
-  <!-- Full stats table -->
-  <div class="cc" style="margin-bottom:8px;">
-    <div class="ct">▸ Full Statistics</div>
-    <div style="overflow-x:auto;">
-      <table class="stbl">
-        <thead><tr><th>PARAMETER</th><th>CURRENT</th><th class="tdmx">MAX</th><th class="tdmn">MIN</th><th class="tdag">AVG</th><th class="tdsd">STDDEV</th><th>UNIT</th></tr></thead>
-        <tbody id="stbody"><tr><td colspan="7" style="text-align:center;color:var(--fg3);padding:20px;">รอข้อมูล...</td></tr></tbody>
-      </table>
-    </div>
-  </div>
-
-  <!-- 3D Views -->
-  <div class="g2">
-    <div class="cc">
-      <div class="ct">▸ Altitude Profile <small>(full history · scroll=zoom · drag=pan · dblclick=reset)</small></div>
-      <div style="height:320px;position:relative;"><canvas id="ch_af"></canvas></div>
-    </div>
-    <div class="col">
-      <div class="cc">
-        <div class="ct">▸ Orientation — Rocket 3D + Attitude Indicator <small>(drag 3D = rotate view)</small></div>
-        <div style="display:flex;gap:6px;align-items:flex-start;">
-          <div class="c3d" id="acc3d" style="height:230px;flex:1;min-width:0;"></div>
-          <canvas id="att-ind" width="150" height="230" style="flex-shrink:0;border-radius:6px;border:1px solid var(--border);display:block;"></canvas>
-        </div>
-        <div class="acclg" style="margin-top:5px;flex-wrap:wrap;gap:10px;">
-          <span class="lx">X: <span id="ax">—</span> mg</span>
-          <span class="ly">Y: <span id="ay">—</span> mg</span>
-          <span class="lz">Z: <span id="az">—</span> mg</span>
-          <span style="color:var(--teal);font-family:var(--font-mono);font-size:10px;">|v|: <span id="amag">—</span> mg</span>
-          <span style="color:var(--amber);font-family:var(--font-mono);font-size:10px;">Pitch: <span id="apitch">—</span>°</span>
-          <span style="color:var(--amber);font-family:var(--font-mono);font-size:10px;">Roll: <span id="aroll">—</span>°</span>
-          <span style="color:var(--cyan);font-family:var(--font-mono);font-size:10px;">Tilt: <span id="atilt">—</span>°</span>
-        </div>
-      </div>
-      <div class="cc">
-        <div class="ct">▸ Altitude vs Speed</div>
-        <div style="height:120px;position:relative;"><canvas id="ch8"></canvas></div>
-      </div>
-    </div>
-  </div>
-</div>
+</div><!-- end #app -->
 
 <script src="dashboard.js"></script>
 </body>

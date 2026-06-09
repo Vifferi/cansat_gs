@@ -29,15 +29,53 @@ function toggleTheme(){
   rebuildChartTheme();
 }
 function rebuildChartTheme(){
+  const fg=cv('--fg3'),b=cv('--border');
+  const col=isDark?THEME_COLORS.dark:THEME_COLORS.light;
+
+  // 1. Axis ticks/grid for every chart
   [...Object.values(C)].forEach(c=>{
-    if(!c)return;
-    const fg=cv('--fg3'),b=cv('--border');
-    if(c.options&&c.options.scales)Object.values(c.options.scales).forEach(ax=>{
-      if(ax.ticks)ax.ticks.color=fg;if(ax.grid)ax.grid.color=b;if(ax.border)ax.border.color=b;
-      if(ax.title&&ax.title.display)ax.title.color=fg;
+    if(!c||!c.options?.scales)return;
+    Object.values(c.options.scales).forEach(ax=>{
+      if(ax.ticks)ax.ticks.color=fg;
+      if(ax.grid)ax.grid.color=b;
+      if(ax.border)ax.border.color=b;
+      if(ax.title?.display)ax.title.color=fg;
     });
-    c.update('none');
   });
+
+  // 2. y2 axis accent colors (override generic grey set above)
+  if(C.env?.options?.scales?.y2){
+    C.env.options.scales.y2.ticks.color=col.y2envTick;
+    C.env.options.scales.y2.border.color=col.y2envBd;
+    if(C.env.options.scales.y2.title)C.env.options.scales.y2.title.color=col.y2envTick;
+  }
+  if(C.pwr?.options?.scales?.y2){
+    C.pwr.options.scales.y2.ticks.color=col.y2pwrTick;
+    C.pwr.options.scales.y2.border.color=col.y2pwrBd;
+    if(C.pwr.options.scales.y2.title)C.pwr.options.scales.y2.title.color=col.y2pwrTick;
+  }
+
+  // 3. Dataset line / fill colors
+  if(C.alt){C.alt.data.datasets[0].borderColor=col.alt.line;C.alt.data.datasets[0].backgroundColor=col.alt.fill;}
+  if(C.spd){C.spd.data.datasets[0].borderColor=col.spd.line;C.spd.data.datasets[0].backgroundColor=col.spd.fill;}
+  if(C.vac){C.vac.data.datasets[0].borderColor=col.vac.line;C.vac.data.datasets[0].backgroundColor=col.vac.fill;}
+  if(C.env){C.env.data.datasets[0].borderColor=col.temp;C.env.data.datasets[1].borderColor=col.hum;}
+  if(C.acc){C.acc.data.datasets[0].borderColor=col.ax;C.acc.data.datasets[1].borderColor=col.ay;C.acc.data.datasets[2].borderColor=col.az;}
+  if(C.pwr){C.pwr.data.datasets[0].borderColor=col.volt;C.pwr.data.datasets[1].borderColor=col.curr;}
+  if(C.pm){C.pm.data.datasets[0].borderColor=col.pm1;C.pm.data.datasets[1].borderColor=col.pm25;C.pm.data.datasets[2].borderColor=col.pm10;}
+  if(C.altFull){C.altFull.data.datasets[0].borderColor=col.alt.line;C.altFull.data.datasets[0].backgroundColor=col.alt.fill;}
+  if(C.as){C.as.data.datasets[0].borderColor=col.as.line;C.as.data.datasets[0].pointBackgroundColor=col.as.pt;}
+
+  // 4. Legend label color
+  LG.labels.color=col.lgc;
+  [C.env,C.acc,C.pwr,C.pm].forEach(c=>{if(c)c.options.plugins.legend.labels.color=col.lgc;});
+
+  // 5. Scatter axis title colors
+  if(C.as?.options?.scales?.x?.title)C.as.options.scales.x.title.color=col.xTitleSpd;
+  if(C.as?.options?.scales?.y?.title)C.as.options.scales.y.title.color=col.yTitleAlt;
+
+  // 6. Flush
+  [...Object.values(C)].forEach(c=>{if(c)c.update('none');});
 }
 
 // ══════════════════════════════════════════════════════
@@ -107,21 +145,55 @@ function mkC(id,ds,ex={}){
   return new Chart(el,{type:'line',data:{labels:[],datasets:ds.map(d=>({data:[],pointRadius:0,borderWidth:1.5,tension:0.35,...d}))},options:cOpts(ex)});
 }
 const MP=200;
-const LG={display:true,labels:{color:'rgba(150,200,230,0.6)',boxWidth:7,font:{size:8,family:"'Share Tech Mono',monospace"}}};
+
+// ── Per-theme chart colour palettes ──────────────────
+const THEME_COLORS={
+  dark:{
+    alt:{line:'#a78bfa',fill:'rgba(167,139,250,0.08)'},
+    spd:{line:'#34d399',fill:'rgba(52,211,153,0.07)'},
+    vac:{line:'#f87171',fill:'rgba(248,113,113,0.07)'},
+    temp:'#34d399',hum:'#fbbf24',
+    ax:'#f87171',ay:'#34d399',az:'#c084fc',
+    volt:'#fbbf24',curr:'#22d3ee',
+    pm1:'#22d3ee',pm25:'#67e8f9',pm10:'#a5f3fc',
+    y2envTick:'rgba(251,191,36,0.5)',  y2envBd:'rgba(251,191,36,0.18)',
+    y2pwrTick:'rgba(34,211,238,0.5)',  y2pwrBd:'rgba(34,211,238,0.18)',
+    lgc:'rgba(200,210,255,0.55)',
+    as:{line:'#34d399',pt:'#34d399'},
+    xTitleSpd:'rgba(52,211,153,0.55)', yTitleAlt:'rgba(167,139,250,0.55)',
+  },
+  light:{
+    alt:{line:'#6366f1',fill:'rgba(99,102,241,0.08)'},
+    spd:{line:'#22c55e',fill:'rgba(34,197,94,0.07)'},
+    vac:{line:'#ef4444',fill:'rgba(239,68,68,0.07)'},
+    temp:'#22c55e',hum:'#f59e0b',
+    ax:'#ef4444',ay:'#22c55e',az:'#8b5cf6',
+    volt:'#f59e0b',curr:'#6366f1',
+    pm1:'#0ea5e9',pm25:'#0284c7',pm10:'#075985',
+    y2envTick:'rgba(245,158,11,0.55)', y2envBd:'rgba(245,158,11,0.2)',
+    y2pwrTick:'rgba(99,102,241,0.55)', y2pwrBd:'rgba(99,102,241,0.2)',
+    lgc:'rgba(30,60,120,0.65)',
+    as:{line:'#22c55e',pt:'#22c55e'},
+    xTitleSpd:'rgba(34,197,94,0.6)',   yTitleAlt:'rgba(99,102,241,0.6)',
+  }
+};
+const _d=THEME_COLORS.dark;
+
+const LG={display:true,labels:{color:_d.lgc,boxWidth:7,font:{size:8,family:"'Share Tech Mono',monospace"}}};
 const C={
-  alt:mkC('ch0',[{borderColor:'#00d4ff',backgroundColor:'rgba(0,212,255,0.07)',fill:true}]),
-  spd:mkC('ch1',[{borderColor:'#00ffcc',backgroundColor:'rgba(0,255,204,0.06)',fill:true}]),
-  vac:mkC('ch2',[{borderColor:'#ff4060',backgroundColor:'rgba(255,64,96,0.06)',fill:true}]),
-  env:mkC('ch3',[{label:'TEMP',borderColor:'#00ff88',yAxisID:'y'},{label:'HUM',borderColor:'#ffc040',yAxisID:'y2',borderDash:[4,2]}],
-    {plugins:{legend:LG},scales:{...cOpts().scales,y2:{position:'right',ticks:{color:'rgba(255,192,64,0.5)'},grid:{drawOnChartArea:false},border:{color:'rgba(255,192,64,0.15)'}}}}),
-  acc:mkC('ch4',[{label:'X',borderColor:'#ff4060'},{label:'Y',borderColor:'#00ff88'},{label:'Z',borderColor:'#bb88ff'}],{plugins:{legend:LG}}),
-  pwr:mkC('ch5',[{label:'V',borderColor:'#ffc040',yAxisID:'y'},{label:'mA',borderColor:'#00d4ff',yAxisID:'y2',borderDash:[4,2]}],
-    {plugins:{legend:LG},scales:{...cOpts().scales,y2:{position:'right',ticks:{color:'rgba(0,212,255,0.5)'},grid:{drawOnChartArea:false},border:{color:'rgba(0,212,255,0.15)'}}}}),
-  pm: mkC('ch6',[{label:'PM1',borderColor:'#00aadd'},{label:'PM2.5',borderColor:'#0077aa'},{label:'PM10',borderColor:'#004466'}],{plugins:{legend:LG}}),
-  altFull:mkC('ch_af',[{borderColor:'#00d4ff',backgroundColor:'rgba(0,212,255,0.07)',fill:true}]),
-  as: mkC('ch8',[{borderColor:'#00ffcc',pointRadius:2,pointBackgroundColor:'#00ffcc',tension:0,showLine:true,fill:false}],
-    {scales:{x:{...cOpts().scales.x,title:{display:true,text:'Speed (m/s)',color:'rgba(0,255,204,0.5)',font:{size:8,family:"'Share Tech Mono'"}}},
-              y:{...cOpts().scales.y,title:{display:true,text:'Alt (m)',color:'rgba(0,212,255,0.5)',font:{size:8,family:"'Share Tech Mono'"}}}}}),
+  alt:mkC('ch0',[{borderColor:_d.alt.line,backgroundColor:_d.alt.fill,fill:true}]),
+  spd:mkC('ch1',[{borderColor:_d.spd.line,backgroundColor:_d.spd.fill,fill:true}]),
+  vac:mkC('ch2',[{borderColor:_d.vac.line,backgroundColor:_d.vac.fill,fill:true}]),
+  env:mkC('ch3',[{label:'TEMP',borderColor:_d.temp,yAxisID:'y'},{label:'HUM',borderColor:_d.hum,yAxisID:'y2',borderDash:[4,2]}],
+    {plugins:{legend:LG},scales:{...cOpts().scales,y2:{position:'right',ticks:{color:_d.y2envTick},grid:{drawOnChartArea:false},border:{color:_d.y2envBd}}}}),
+  acc:mkC('ch4',[{label:'X',borderColor:_d.ax},{label:'Y',borderColor:_d.ay},{label:'Z',borderColor:_d.az}],{plugins:{legend:LG}}),
+  pwr:mkC('ch5',[{label:'V',borderColor:_d.volt,yAxisID:'y'},{label:'mA',borderColor:_d.curr,yAxisID:'y2',borderDash:[4,2]}],
+    {plugins:{legend:LG},scales:{...cOpts().scales,y2:{position:'right',ticks:{color:_d.y2pwrTick},grid:{drawOnChartArea:false},border:{color:_d.y2pwrBd}}}}),
+  pm: mkC('ch6',[{label:'PM1',borderColor:_d.pm1},{label:'PM2.5',borderColor:_d.pm25},{label:'PM10',borderColor:_d.pm10}],{plugins:{legend:LG}}),
+  altFull:mkC('ch_af',[{borderColor:_d.alt.line,backgroundColor:_d.alt.fill,fill:true}]),
+  as: mkC('ch8',[{borderColor:_d.as.line,pointRadius:2,pointBackgroundColor:_d.as.pt,tension:0,showLine:true,fill:false}],
+    {scales:{x:{...cOpts().scales.x,title:{display:true,text:'Speed (m/s)',color:_d.xTitleSpd,font:{size:8,family:"'Share Tech Mono'"}}},
+              y:{...cOpts().scales.y,title:{display:true,text:'Alt (m)',color:_d.yTitleAlt,font:{size:8,family:"'Share Tech Mono'"}}}}}),
 };
 // ── Axis titles ───────────────────────────────────────
 (()=>{
