@@ -907,52 +907,88 @@ async def demo_generator(auto_export=False):
     global latest_packet
     log.info("DEMO MODE — simulated CanSat flight")
     t, pkt_id = 0.0, 1
-    APOGEE, LAND = 20, 55
+
+    # Flight timeline (seconds)
+    T_BOOST  = 6.0    # end of engine burn
+    T_APOGEE = 22.0   # apogee
+    T_DEPLOY = 26.0   # end of deployment phase
+    T_LAND   = 90.0   # touchdown
+    ALT_MAX  = 800.0  # apogee altitude — above APOGEE_MIN_ALT_M (267m)
 
     while True:
-        if t < APOGEE:
-            alt    = (t / APOGEE) * 800
-            status = 1
-        elif t < LAND:
-            frac   = (t - APOGEE) / (LAND - APOGEE)
-            alt    = 800 * (1 - frac)
-            status = 8 if frac > 0.1 else 2
+        # ── Altitude + acc_y profile (Y axis points up along rocket body) ────
+        if t <= T_BOOST:
+            # Boost: engine firing, ~2.2g thrust force on Y
+            frac   = t / T_BOOST
+            alt    = frac * 350.0
+            acc_y  = round(2200 + random.uniform(-200, 200), 1)
+            status = 1  # ascending
+
+        elif t <= T_APOGEE:
+            # Coast up: decelerating, Y-force fades from 980mg → 0 (freefall)
+            frac   = (t - T_BOOST) / (T_APOGEE - T_BOOST)
+            alt    = 350.0 + frac * (ALT_MAX - 350.0)
+            acc_y  = round((1.0 - frac) * 980 + random.uniform(-50, 50), 1)
+            status = 1  # ascending
+
+        elif t <= T_DEPLOY:
+            # Apogee → deployment: near-weightlessness then chute opens
+            frac   = (t - T_APOGEE) / (T_DEPLOY - T_APOGEE)
+            alt    = ALT_MAX - frac * 12.0
+            acc_y  = round(random.uniform(-40, 40), 1)   # ~0g freefall
+            status = 2 if frac < 0.5 else 4  # apogee → deployment
+
+        elif t <= T_LAND:
+            # Descending under chute: ~1g on Y
+            frac   = (t - T_DEPLOY) / (T_LAND - T_DEPLOY)
+            alt    = max(0.0, (ALT_MAX - 12.0) * (1.0 - frac))
+            acc_y  = round(980 + random.uniform(-40, 40), 1)
+            status = 8  # descending
+
         else:
-            alt    = max(0, 10 - (t - LAND) * 5)
+            # Landed: ~1g on Y, altitude settling to ground
+            alt    = max(0.0, 3.0 - (t - T_LAND) * 0.5)
+            acc_y  = round(980 + random.uniform(-15, 15), 1)
             status = 16
 
+        # X and Z: lateral vibration only — gravity is on Y (up)
+        acc_x = round(random.uniform(-80, 80), 1)
+        acc_z = round(random.uniform(-80, 80), 1)
+
         data = {
-            "type":"telemetry","timestamp":datetime.now().isoformat(),
-            "time":round(t,1),"packet_id":pkt_id,
-            "lat":round(18.12345 + t*0.00001, 6),"lon":round(98.12345 + t*0.000005, 6),
-            "sat":10+random.randint(0,4),
-            "temp":round(27 + t*0.05 + random.uniform(-0.3,0.3), 2),
-            "humidity":round(65 + math.sin(t*0.1)*5, 1),
-            "alt_baro":round(alt + random.uniform(-2,2), 1),
-            "acc_x":round(random.uniform(-200,200),1),
-            "acc_y":round(random.uniform(-200,200),1),
-            "acc_z":round(980 + random.uniform(-50,50),1),
-            "heading":round((t*3)%360, 1),
-            "pm1_0":round(12+random.uniform(-2,5),1),
-            "pm2_5":round(25+random.uniform(-3,8),1),
-            "pm10":round(40+random.uniform(-5,10),1),
-            "voltage":round(3.7-t*0.005, 2),
-            "current":round(120+random.uniform(-10,10),1),
-            "watt":round((3.7-t*0.005)*(120+random.uniform(-10,10))/1000, 3),
-            "battery_percent":round(max(0,85-t*0.3),1),
-            "status":status,
-            "status_flags":decode_status(status),
+            "type": "telemetry", "timestamp": datetime.now().isoformat(),
+            "time": round(t, 1), "packet_id": pkt_id,
+            "lat":             round(18.12345 + t * 0.00001, 6),
+            "lon":             round(98.12345 + t * 0.000005, 6),
+            "sat":             10 + random.randint(0, 4),
+            "temp":            round(27 + t * 0.05 + random.uniform(-0.3, 0.3), 2),
+            "humidity":        round(65 + math.sin(t * 0.1) * 5, 1),
+            "alt_baro":        round(alt + random.uniform(-2, 2), 1),
+            "acc_x":           acc_x,
+            "acc_y":           acc_y,
+            "acc_z":           acc_z,
+            "heading":         round((t * 3) % 360, 1),
+            "pm1_0":           round(12 + random.uniform(-2, 5), 1),
+            "pm2_5":           round(25 + random.uniform(-3, 8), 1),
+            "pm10":            round(40 + random.uniform(-5, 10), 1),
+            "voltage":         round(3.7 - t * 0.005, 2),
+            "current":         round(120 + random.uniform(-10, 10), 1),
+            "watt":            round((3.7 - t * 0.005) * (120 + random.uniform(-10, 10)) / 1000, 3),
+            "battery_percent": round(max(0, 85 - t * 0.3), 1),
+            "status":          status,
+            "status_flags":    decode_status(status),
         }
 
+        apply_kalman(data)
         latest_packet = data
-        packet_log.append({k:v for k,v in data.items() if k in CSV_HEADERS+["timestamp"]})
+        packet_log.append({k: v for k, v in data.items() if k in CSV_HEADERS + ["timestamp"]})
         log.info(f"DEMO PKT#{pkt_id:04d}  alt={data['alt_baro']:.0f}m  status={status}")
         await broadcast(data)
 
         t += 0.5; pkt_id += 1
         await asyncio.sleep(0.5)
 
-        if status == 16 and t > LAND + 5:
+        if status == 16 and t > T_LAND + 5:
             log.info("Mission complete!")
             if auto_export:
                 export_excel()
