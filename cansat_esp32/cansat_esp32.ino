@@ -377,6 +377,8 @@ void setup() {
     if (lora_ok) {
         LoRa.setSignalBandwidth(LORA_BW_HZ);
         LoRa.setSpreadingFactor(LORA_SF);
+        LoRa.setTxPower(17);
+        LoRa.enableCrc();
     } else {
         Serial.println("# [WARN] LoRa not found");
     }
@@ -498,9 +500,10 @@ void loop() {
 
     // SF11 BW125 ToA ~2s — throttle to prevent packets merging in FIFO (min 2200ms)
     if (lora_ok && (millis() - last_lora_ms >= 2200)) {
-        LoRa.beginPacket();
-        LoRa.print(line);
-        LoRa.endPacket(true);
-        last_lora_ms = millis();
+        if (LoRa.beginPacket()) {
+            LoRa.print(line);
+            LoRa.endPacket(true);
+            last_lora_ms = millis();
+        }
     }
 }

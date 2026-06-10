@@ -160,7 +160,8 @@ def parse_csv_line(line: str):
             try:
                 data[k] = float(v)
             except (ValueError, TypeError):
-                data[k] = 0.0  # sensor ไม่ได้ต่อ หรือ field ว่าง → ใช้ 0
+                log.warning(f"Corrupt field '{k}': {repr(v)} — packet dropped")
+                return None
     data["timestamp"] = datetime.now().isoformat()
     return data
 

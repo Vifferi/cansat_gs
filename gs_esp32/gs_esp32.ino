@@ -49,6 +49,7 @@ void setup() {
     }
     LoRa.setSignalBandwidth(LORA_BW_HZ);
     LoRa.setSpreadingFactor(LORA_SF);
+    LoRa.enableCrc();
 
     Serial.println("# GS LoRa ready — 923.75 MHz SF11 BW125");
 }
@@ -62,12 +63,19 @@ void loop() {
     int packetSize = LoRa.parsePacket();
     if (packetSize == 0) return;
 
-    String packet = "";
-    while (LoRa.available()) {
-        packet += (char)LoRa.read();
+    char packet[256];
+    int  idx = 0;
+    while (LoRa.available() && idx < (int)sizeof(packet) - 1) {
+        packet[idx++] = (char)LoRa.read();
     }
-    packet.trim();
-    if (packet.length() == 0) return;
+    while (LoRa.available()) LoRa.read();  // flush overflow
+    packet[idx] = '\0';
+
+    // trim trailing whitespace
+    while (idx > 0 && (packet[idx-1] == '\r' || packet[idx-1] == '\n' || packet[idx-1] == ' '))
+        packet[--idx] = '\0';
+
+    if (idx == 0) return;
 
     // Forward CSV to server.py (same format as direct USB from CanSat)
     Serial.println(packet);
