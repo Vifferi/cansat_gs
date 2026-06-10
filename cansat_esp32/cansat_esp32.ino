@@ -68,7 +68,7 @@
 #define LORA_BW_HZ          125E3       // Main BW 125 kHz
 #define LORA_SF             11          // Main SF
 
-#define APOGEE_MIN_ALT_M    1.0f        // ต้องขึ้นไปอย่างน้อย 1m ก่อน detect apogee
+#define APOGEE_MIN_ALT_M    267.0f      // ต้องขึ้นไปอย่างน้อย 267m ก่อน detect apogee
 #define LANDED_THRESH_M     50.0f       // ถ้าต่ำกว่า 50m และไม่ขยับ = ลงจอด
 #define FAILSAFE_TIMEOUT_MS 10000UL    // ถ้า sensor ทั้งคู่ตาย → force deploy หลัง 10s
 
@@ -193,20 +193,11 @@ int updateFlightStatus(float alt, float acc_y) {
             bool baro_ok = bme_ok || bmp_ok;
             bool apogee_detected = false;
 
-            if (baro_ok && adxl_ok) {
-                // ปกติ — ต้องผ่านทั้ง 3 เงื่อนไข
+            if (baro_ok) {
                 apogee_detected = (peak_alt > APOGEE_MIN_ALT_M) &&
-                                 // (((peak_alt - alt) >= 2.0f) || (acc_y < 500.0f));///////////////////////////////////////////////////////////////////////////////////////////
-                                  (((peak_alt - alt) >= 2.0f) );
-            } else if (baro_ok && !adxl_ok) {
-                // ADXL เสีย — ใช้แค่ baro
-                apogee_detected = (peak_alt > APOGEE_MIN_ALT_M) &&
-                                  ((peak_alt - alt) >= 2.0f);
-            } else if (!baro_ok && adxl_ok) {
-                // Baro เสีย — ใช้แค่ acc_y
-                apogee_detected = (acc_y < 3.0f);  // < 0.3g — free fall threshold
+                                  ((peak_alt - alt) >= 3.0f);
             } else {
-                // ทั้งคู่เสีย — force deploy หลัง 10s
+                // Baro เสีย — force deploy หลัง 10s
                 apogee_detected = (millis() - start_ms >= FAILSAFE_TIMEOUT_MS);
             }
 
