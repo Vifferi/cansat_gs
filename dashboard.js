@@ -12,6 +12,7 @@ let replayData=[], replayIdx=0, replayTimer=null, replayPlaying=false;
 
 // Map state
 let mapObj=null,mapMarker=null,mapPath=null,mapPathCoords=[],mapFollow=true;
+let gsMarker=null,gsPos=null;
 
 // ══════════════════════════════════════════════════════
 // HELPERS
@@ -220,9 +221,9 @@ const C={
   };
   set(C.alt,    T, 'Altitude (m)');
   set(C.spd,    T, 'Speed (m/s)');
-  set(C.vac,    T, 'Vert Accel (mg)');
+  set(C.vac,    T, 'Vert Accel (m/s²)');
   set(C.env,    T, 'Temp (°C)',   'Humidity (%)');
-  set(C.acc,    T, 'Accel (mg)');
+  set(C.acc,    T, 'Accel (m/s²)');
   set(C.pwr,    T, 'Voltage (V)', 'Current (mA)');
   set(C.pm,     T, 'PM (µg/m³)');
   set(C.altFull,T, 'Altitude (m)');
@@ -310,7 +311,7 @@ const CS={
 const SDEFS=[
   {key:'alt_baro',lbl:'Altitude',unit:'m'},{key:'temp',lbl:'Temperature',unit:'°C'},
   {key:'humidity',lbl:'Humidity',unit:'%'},{key:'speed',lbl:'Speed (calc)',unit:'m/s'},
-  {key:'vacc',lbl:'Vert Accel',unit:'mg'},{key:'accel_mag',lbl:'|Accel| (calc)',unit:'mg'},
+  {key:'vacc',lbl:'Vert Accel',unit:'m/s²'},{key:'accel_mag',lbl:'|Accel| (calc)',unit:'m/s²'},
   {key:'voltage',lbl:'Voltage',unit:'V'},
   {key:'current',lbl:'Current',unit:'mA'},{key:'watt',lbl:'Power',unit:'W'},
   {key:'pm1_0',lbl:'PM 1.0',unit:'µg'},{key:'pm2_5',lbl:'PM 2.5',unit:'µg'},
@@ -343,7 +344,7 @@ function refreshStats(){
   const as=gst('alt_baro'),ss=gst('speed'),ams=gst('accel_mag'),ps=gst('pm2_5'),ts=gst('temp'),vls=gst('voltage');
   if(as){si('st2',fm(as.max,0)+' m');}
   if(ss){si('st3',fm(ss.max,2)+' m/s');}
-  if(ams){si('st4',fm(ams.max,0)+' mg');}
+  if(ams){si('st4',fm(ams.max,2)+' m/s²');}
   if(ps){si('st5',fm(ps.avg,1)+' µg/m³');}
   if(ts){si('st6',fm(ts.avg,1)+' °C');}
   if(vls){si('st7',fm(vls.min,2)+' V');}
@@ -373,7 +374,7 @@ function calcDerived(d){
     }
   }
   speedHist.push({speed,vs:vspeed});
-  const vacc=d.acc_y??0;
+  const vacc=(d.acc_y??0)+9.807;  // remove gravity (acc_y axis points down → gravity = -9.807)
   return{speed:Math.max(0,speed),vacc};
 }
 
@@ -397,7 +398,7 @@ function chkEvents(d){
     if(s&16)logEvt('🏁 LANDED','ok');
     lastStatus=s;
   }
-  if(d.battery_percent<20)logEvt(`⚡ Low bat: ${d.battery_percent.toFixed(0)}%`,'crit');
+  if(d.battery_percent>=0&&d.battery_percent<20)logEvt(`⚡ Low bat: ${d.battery_percent.toFixed(0)}%`,'crit');
 }
 
 // ══════════════════════════════════════════════════════
@@ -416,7 +417,7 @@ function updateHealth(d){
   if(sat!=null){const st=sat===0?'fail':sat<4?'warn':'ok';setChip('gps',st,'');}
   // IMU
   const mag=d.acc_x!=null?Math.sqrt(d.acc_x**2+d.acc_y**2+d.acc_z**2):null;
-  if(mag!=null){const st=Math.abs(mag-981)<200?'ok':'warn';setChip('imu',st,'');}
+  if(mag!=null){const st=Math.abs(mag-9.807)<2?'ok':'warn';setChip('imu',st,'');}
   // AIR
   const pm=d.pm2_5;
   if(pm!=null){const st=pm<=12?'ok':pm<=55?'warn':'fail';setChip('air',st,'');}
@@ -457,12 +458,18 @@ function doUpdate(d){
   si('vcurr',fm(d.current,0)+' mA');
   const watt=d.watt!=null?d.watt:(d.voltage&&d.current?d.voltage*d.current/1000:null);
   si('vwatt',fm(watt,3)+' W');
-  const bat=Math.min(100,Math.max(0,d.battery_percent||0));
-  const batColor=bat>50?'#00ff88':bat>20?'#ffc040':'#ff4060';
+  const batRaw=d.battery_percent;
   const bf=document.getElementById('bfill');
-  bf.style.width=bat+'%'; bf.style.background=batColor;
   const bpct=document.getElementById('v-bat-pct');
-  if(bpct){bpct.textContent=bat.toFixed(0)+'%';bpct.style.color=batColor;}
+  if(batRaw==null||batRaw<0){
+    bf.style.width='0%';
+    if(bpct){bpct.textContent='—%';bpct.style.color='';}
+  }else{
+    const bat=Math.min(100,batRaw);
+    const batColor=bat>50?'#00ff88':bat>20?'#ffc040':'#ff4060';
+    bf.style.width=bat+'%'; bf.style.background=batColor;
+    if(bpct){bpct.textContent=bat.toFixed(0)+'%';bpct.style.color=batColor;}
+  }
 
   const pmx=Math.max(d.pm10||1,1);
   si('pv0',fm(d.pm1_0)); si('pv1',fm(d.pm2_5)); si('pv2',fm(d.pm10));
@@ -883,6 +890,7 @@ function updateMap(lat,lon,alt){
   mapPath.setLatLngs(mapPathCoords);
   mapMarker.setLatLng(ll);
   if(mapFollow)mapObj.panTo(ll,{animate:true,duration:0.3});
+  updateGSDist();
 }
 function toggleMapFollow(){
   mapFollow=!mapFollow;
@@ -894,6 +902,43 @@ function mapFitPath(){
   if(!mapObj||!mapPathCoords.length)return;
   if(mapPathCoords.length>1)mapObj.fitBounds(mapPath.getBounds().pad(0.15));
   else mapObj.setView(mapPathCoords[0],15);
+}
+function resetMapTrail(){
+  mapPathCoords=[];
+  if(mapPath)mapPath.setLatLngs([]);
+  si('map-pts','0');
+  si('map-gs-dist','—');
+}
+function locateGS(){
+  if(!navigator.geolocation){alert('Browser does not support Geolocation');return;}
+  const btn=document.getElementById('gs-loc-btn');
+  if(btn){btn.textContent='⌖ ...';btn.classList.add('act');}
+  navigator.geolocation.getCurrentPosition(pos=>{
+    gsPos=[pos.coords.latitude,pos.coords.longitude];
+    if(mapObj){
+      if(gsMarker){gsMarker.setLatLng(gsPos);}
+      else{
+        const icon=L.divIcon({html:'<div style="width:14px;height:14px;border-radius:50%;background:#ffcc00;border:2px solid #fff;box-shadow:0 0 10px #ffcc00;"></div>',className:'',iconSize:[14,14],iconAnchor:[7,7]});
+        gsMarker=L.marker(gsPos,{icon}).addTo(mapObj);
+        gsMarker.bindPopup('<b style="color:#111">Ground Station</b>').openPopup();
+      }
+      mapObj.setView(gsPos,mapObj.getZoom()<13?15:mapObj.getZoom());
+    }
+    if(btn){btn.textContent='⌖ GS LOC';btn.classList.add('act');}
+    updateGSDist();
+  },err=>{
+    if(btn){btn.textContent='⌖ GS LOC';btn.classList.remove('act');}
+    alert('Geolocation error: '+err.message);
+  },{enableHighAccuracy:true,timeout:10000});
+}
+function updateGSDist(){
+  if(!gsPos||!mapPathCoords.length){si('map-gs-dist','—');return;}
+  const cs=mapPathCoords[mapPathCoords.length-1];
+  const R=6371000,toR=Math.PI/180;
+  const dLat=(cs[0]-gsPos[0])*toR,dLon=(cs[1]-gsPos[1])*toR;
+  const a=Math.sin(dLat/2)**2+Math.cos(gsPos[0]*toR)*Math.cos(cs[0]*toR)*Math.sin(dLon/2)**2;
+  const d=R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+  si('map-gs-dist',d<1000?d.toFixed(0)+' m':(d/1000).toFixed(2)+' km');
 }
 
 // ══════════════════════════════════════════════════════

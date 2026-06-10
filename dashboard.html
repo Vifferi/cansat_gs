@@ -79,8 +79,8 @@
       <div class="gcards">
         <div class="mcard" style="--a:var(--cyan)"><div class="ml">Altitude</div><div class="mv"><span id="m0">—</span><span class="mu">m</span></div><div class="mst"><span class="sv">↑<span id="mx0">—</span></span><span class="sn">↓<span id="mn0">—</span></span><span class="sa">~<span id="ma0">—</span></span></div></div>
         <div class="mcard" style="--a:var(--teal)"><div class="ml">Speed <span class="tag-c">CALC</span></div><div class="mv"><span id="m1">—</span><span class="mu">m/s</span></div><div class="mst"><span class="sv">↑<span id="mx1">—</span></span><span class="sa">~<span id="ma1">—</span></span></div></div>
-        <div class="mcard" style="--a:var(--red)"><div class="ml">Vert Accel</div><div class="mv"><span id="m2">—</span><span class="mu">mg</span></div><div class="mst"><span class="sv">↑<span id="mx2">—</span></span><span class="sn">↓<span id="mn2">—</span></span></div></div>
-        <div class="mcard" style="--a:var(--purple)"><div class="ml">|Acc| <span class="tag-c">CALC</span></div><div class="mv"><span id="m3">—</span><span class="mu">mg</span></div><div class="mst"><span class="sv">↑<span id="mx3">—</span></span></div></div>
+        <div class="mcard" style="--a:var(--red)"><div class="ml">Vert Accel</div><div class="mv"><span id="m2">—</span><span class="mu">m/s²</span></div><div class="mst"><span class="sv">↑<span id="mx2">—</span></span><span class="sn">↓<span id="mn2">—</span></span></div></div>
+        <div class="mcard" style="--a:var(--purple)"><div class="ml">|Acc| <span class="tag-c">CALC</span></div><div class="mv"><span id="m3">—</span><span class="mu">m/s²</span></div><div class="mst"><span class="sv">↑<span id="mx3">—</span></span></div></div>
         <div class="mcard" style="--a:var(--green)"><div class="ml">Temperature</div><div class="mv"><span id="m4">—</span><span class="mu">°C</span></div><div class="mst"><span class="sv">↑<span id="mx4">—</span></span><span class="sn">↓<span id="mn4">—</span></span><span class="sa">~<span id="ma4">—</span></span></div></div>
         <div class="mcard" style="--a:var(--amber)"><div class="ml">Humidity</div><div class="mv"><span id="m5">—</span><span class="mu">%</span></div><div class="mst"><span class="sv">↑<span id="mx5">—</span></span><span class="sn">↓<span id="mn5">—</span></span></div></div>
         <div class="mcard" style="--a:var(--amber)"><div class="ml">Voltage</div><div class="mv"><span id="m6">—</span><span class="mu">V</span></div><div class="mst"><span class="sn">↓<span id="mn6">—</span></span><span class="sa">~<span id="ma6">—</span></span></div></div>
@@ -96,7 +96,7 @@
         <div class="col">
           <div class="cc"><div class="ct">▸ Altitude Profile</div><div class="cw"><canvas id="ch0"></canvas></div></div>
           <div class="cc"><div class="ct">▸ Vertical Acceleration</div><div class="cw"><canvas id="ch2"></canvas></div></div>
-          <div class="cc"><div class="ct">▸ Accel XYZ <small>(mg)</small></div><div class="cw"><canvas id="ch4"></canvas></div></div>
+          <div class="cc"><div class="ct">▸ Accel XYZ <small>(m/s²)</small></div><div class="cw"><canvas id="ch4"></canvas></div></div>
           <div class="cc"><div class="ct">▸ PM Air Quality</div><div class="cw"><canvas id="ch6"></canvas></div></div>
         </div>
         <div class="col">
@@ -194,14 +194,17 @@
     <div class="tab-panel" id="tp2" style="padding:0;height:calc(100vh - 80px);overflow:hidden;position:relative;">
       <div id="map-container" style="width:100%;height:100%;"></div>
       <div style="position:absolute;top:80px;left:10px;z-index:1001;display:flex;flex-direction:column;gap:4px;">
-        <button class="hbtn act" id="map-follow-btn" onclick="toggleMapFollow()">⊙ FOLLOW</button>
-        <button class="hbtn" onclick="mapFitPath()">⤢ FIT</button>
+        <button class="hbtn act" id="map-follow-btn" onclick="toggleMapFollow()" style="background:rgba(5,14,26,0.85);border-color:var(--cyan);color:var(--cyan);">⊙ FOLLOW</button>
+        <button class="hbtn" onclick="mapFitPath()" style="background:rgba(5,14,26,0.85);border-color:var(--fg2);color:var(--fg);">⤢ FIT</button>
+        <button class="hbtn" onclick="resetMapTrail()" style="background:rgba(5,14,26,0.85);border-color:var(--red);color:var(--red);">⟳ RESET TRAIL</button>
+        <button class="hbtn" id="gs-loc-btn" onclick="locateGS()" style="background:rgba(5,14,26,0.85);border-color:var(--yellow,#ffcc00);color:var(--yellow,#ffcc00);">⌖ GS LOC</button>
       </div>
       <div style="position:absolute;bottom:28px;left:10px;z-index:1001;background:rgba(5,14,26,0.88);padding:6px 12px;border-radius:6px;font-family:var(--font-mono);font-size:10px;color:var(--fg2);border:1px solid var(--border);display:flex;gap:14px;pointer-events:none;">
         <span>LAT <strong id="map-lat" style="color:var(--cyan)">—</strong></span>
         <span>LON <strong id="map-lon" style="color:var(--cyan)">—</strong></span>
         <span>ALT <strong id="map-alt" style="color:var(--green)">—</strong> m</span>
         <span>TRACK <strong id="map-pts" style="color:var(--fg2)">0</strong> pts</span>
+        <span>GS <strong id="map-gs-dist" style="color:var(--yellow)">—</strong></span>
       </div>
     </div><!-- end tp2 -->
 

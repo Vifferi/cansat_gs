@@ -68,8 +68,8 @@
 #define LORA_BW_HZ          125E3       // Main BW 125 kHz
 #define LORA_SF             11          // Main SF
 
-#define APOGEE_MIN_ALT_M    250.0f      // ต้องขึ้นไปอย่างน้อย 250m ก่อน detect apogee
-#define LANDED_THRESH_M     2.0f        // ถ้าต่ำกว่า 2m และไม่ขยับ = ลงจอด
+#define APOGEE_MIN_ALT_M    1.0f        // ต้องขึ้นไปอย่างน้อย 1m ก่อน detect apogee
+#define LANDED_THRESH_M     50.0f       // ถ้าต่ำกว่า 50m และไม่ขยับ = ลงจอด
 #define FAILSAFE_TIMEOUT_MS 10000UL    // ถ้า sensor ทั้งคู่ตาย → force deploy หลัง 10s
 
 // Status bitmask — ตรงกับ server.py decode_status()
@@ -123,12 +123,9 @@ bool     pms_warned = false;
 
 // SD write buffer — 20 rows per file
 #define SD_FLUSH_EVERY  20
-char     sd_buffer[SD_FLUSH_EVERY][180];
+char     sd_buffer[SD_FLUSH_EVERY][192];
 uint8_t  sd_buf_count = 0;
 uint16_t sd_file_index = 0;     // ต่อจากไฟล์สุดท้ายที่มีอยู่ใน SD (scan ใน setup)
-
-// Non-blocking beep state
-struct { int dur; int rem; bool on; uint32_t next_ms; } bq = {0, 0, false, 0};
 
 // Apogee hold timer
 uint32_t apogee_enter_ms = 0;
@@ -144,35 +141,6 @@ bool     _alt_full = false;
 // ═══════════════════════════════════════════════════════════════════════════════
 // Helpers
 // ═══════════════════════════════════════════════════════════════════════════════
-
-// บล็อก — ใช้ได้เฉพาะใน setup() ก่อน loop เริ่ม
-void beepBlocking(int duration_ms, int times = 1) {
-    for (int i = 0; i < times; i++) {
-        digitalWrite(BUZZER_PIN, HIGH);
-        delay(duration_ms);
-        digitalWrite(BUZZER_PIN, LOW);
-        if (times > 1) delay(100);
-    }
-}
-// Non-blocking — ใช้ใน loop() และ state machine
-void beepStart(int duration_ms, int times) {
-    bq = {duration_ms, times, false, (uint32_t)millis()};
-}
-void beepTick() {
-    if (!bq.rem) return;
-    uint32_t now = millis();
-    if (now < bq.next_ms) return;
-    if (!bq.on) {
-        digitalWrite(BUZZER_PIN, HIGH);
-        bq.on = true;
-        bq.next_ms = now + bq.dur;
-    } else {
-        digitalWrite(BUZZER_PIN, LOW);
-        bq.on = false;
-        bq.rem--;
-        bq.next_ms = now + (bq.rem ? 100 : 0);
-    }
-}
 
 // ─── Altitude smoother (3-sample moving average) ──────────────────────────────
 float smoothAlt(float v) {
@@ -228,24 +196,23 @@ int updateFlightStatus(float alt, float acc_y) {
             if (baro_ok && adxl_ok) {
                 // ปกติ — ต้องผ่านทั้ง 3 เงื่อนไข
                 apogee_detected = (peak_alt > APOGEE_MIN_ALT_M) &&
-                                  ((peak_alt - alt) >= 2.0f) &&
-                                  (acc_y < 500.0f);
+                                 // (((peak_alt - alt) >= 2.0f) || (acc_y < 500.0f));///////////////////////////////////////////////////////////////////////////////////////////
+                                  (((peak_alt - alt) >= 2.0f) );
             } else if (baro_ok && !adxl_ok) {
                 // ADXL เสีย — ใช้แค่ baro
                 apogee_detected = (peak_alt > APOGEE_MIN_ALT_M) &&
                                   ((peak_alt - alt) >= 2.0f);
             } else if (!baro_ok && adxl_ok) {
                 // Baro เสีย — ใช้แค่ acc_y
-                apogee_detected = (acc_y < 500.0f);
+                apogee_detected = (acc_y < 3.0f);  // < 0.3g — free fall threshold
             } else {
                 // ทั้งคู่เสีย — force deploy หลัง 10s
                 apogee_detected = (millis() - start_ms >= FAILSAFE_TIMEOUT_MS);
             }
 
             if (apogee_detected) {
-                deployServo.write(90);
+                deployServo.write(45);
                 deployed = true;
-                beepStart(200, 3);
                 flight_status = STATUS_APOGEE;
             }
             break;
@@ -264,9 +231,8 @@ int updateFlightStatus(float alt, float acc_y) {
             break;
 
         case STATUS_DESCENDING:
-            if (alt <= LANDED_THRESH_M && fabsf(dAlt) < 0.15f) {
+            if (deployed && alt <= LANDED_THRESH_M && fabsf(dAlt) < 0.15f) {
                 flight_status = STATUS_LANDED;
-                beepStart(1000, 5);
             }
             break;
     }
@@ -406,7 +372,6 @@ void setup() {
     }
 
     start_ms = millis();
-    beepBlocking(100, 2);
     Serial.println("# CanSat NAJA ready");
 }
 
@@ -418,7 +383,6 @@ void setup() {
 void loop() {
     while (gpsSerial.available()) gps.encode(gpsSerial.read());
     parsePMS();
-    beepTick();     // non-blocking beep — ต้องเรียกทุก iteration
 
     if (millis() - last_send < SEND_INTERVAL_MS) return;
     last_send = millis();
@@ -439,11 +403,9 @@ void loop() {
     if (adxl_ok) {
         sensors_event_t evt;
         adxl.getEvent(&evt);
-        // แปลง m/s² → mg  (1g = 9.80665 m/s²)
-        const float G = 9.80665f;
-        acc_x = evt.acceleration.x / G * 1000.0f;
-        acc_y = evt.acceleration.y / G * 1000.0f;
-        acc_z = evt.acceleration.z / G * 1000.0f;
+        acc_x = evt.acceleration.x;   // m/s²
+        acc_y = evt.acceleration.y;   // m/s²
+        acc_z = evt.acceleration.z;   // m/s²
     }
 
     // ── QMC5883L ──────────────────────────────────────────────────────────────
@@ -476,9 +438,13 @@ void loop() {
     prev_alt   = alt_smooth;
 
     // ── Get GPS wall-clock time (HH:MM:SS) ────────────────────────────────────
-    char wall_clock[10] = "--:--:--";
-    if (gps.time.isValid() && gps.time.age() < 2000) {
-        snprintf(wall_clock, sizeof(wall_clock), "%02d:%02d:%02d",
+    char wall_clock[20] = "----/--/-- --:--:--";
+    if (gps.date.isValid() && gps.time.isValid() && gps.time.age() < 2000) {
+        snprintf(wall_clock, sizeof(wall_clock), "%04d/%02d/%02d %02d:%02d:%02d",
+                 gps.date.year(), gps.date.month(), gps.date.day(),
+                 gps.time.hour(), gps.time.minute(), gps.time.second());
+    } else if (gps.time.isValid() && gps.time.age() < 2000) {
+        snprintf(wall_clock, sizeof(wall_clock), "----/--/-- %02d:%02d:%02d",
                  gps.time.hour(), gps.time.minute(), gps.time.second());
     }
 
@@ -500,7 +466,7 @@ void loop() {
     );
 
     // ── Build SD line (22 fields — เพิ่ม wall_clock หลัง team_id) ────────────
-    char sd_line[180];
+    char sd_line[192];
     snprintf(sd_line, sizeof(sd_line),
         "%s,%s,%.1f,%lu,%.7f,%.7f,%d,"
         "%.2f,%.2f,%.1f,"
