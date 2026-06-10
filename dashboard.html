@@ -8,6 +8,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link rel="stylesheet" href="dashboard.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 </head>
 <body data-theme="dark">
 
@@ -30,6 +31,7 @@
       <div class="sb-sec-lbl">NAVIGATION</div>
       <button class="tbtn act" onclick="goTab(0)">📡 Monitor</button>
       <button class="tbtn" onclick="goTab(1)">📊 Analysis</button>
+      <button class="tbtn" onclick="goTab(2)">📍 Map</button>
     </div>
     <div class="sb-btm">
       <button class="hbtn sb-theme-btn" onclick="toggleTheme()" id="tbtn">☀ LIGHT</button>
@@ -77,7 +79,7 @@
       <div class="gcards">
         <div class="mcard" style="--a:var(--cyan)"><div class="ml">Altitude</div><div class="mv"><span id="m0">—</span><span class="mu">m</span></div><div class="mst"><span class="sv">↑<span id="mx0">—</span></span><span class="sn">↓<span id="mn0">—</span></span><span class="sa">~<span id="ma0">—</span></span></div></div>
         <div class="mcard" style="--a:var(--teal)"><div class="ml">Speed <span class="tag-c">CALC</span></div><div class="mv"><span id="m1">—</span><span class="mu">m/s</span></div><div class="mst"><span class="sv">↑<span id="mx1">—</span></span><span class="sa">~<span id="ma1">—</span></span></div></div>
-        <div class="mcard" style="--a:var(--red)"><div class="ml">Vert Accel <span class="tag-c">CALC</span></div><div class="mv"><span id="m2">—</span><span class="mu">m/s²</span></div><div class="mst"><span class="sv">↑<span id="mx2">—</span></span><span class="sn">↓<span id="mn2">—</span></span></div></div>
+        <div class="mcard" style="--a:var(--red)"><div class="ml">Vert Accel</div><div class="mv"><span id="m2">—</span><span class="mu">mg</span></div><div class="mst"><span class="sv">↑<span id="mx2">—</span></span><span class="sn">↓<span id="mn2">—</span></span></div></div>
         <div class="mcard" style="--a:var(--purple)"><div class="ml">|Acc| <span class="tag-c">CALC</span></div><div class="mv"><span id="m3">—</span><span class="mu">mg</span></div><div class="mst"><span class="sv">↑<span id="mx3">—</span></span></div></div>
         <div class="mcard" style="--a:var(--green)"><div class="ml">Temperature</div><div class="mv"><span id="m4">—</span><span class="mu">°C</span></div><div class="mst"><span class="sv">↑<span id="mx4">—</span></span><span class="sn">↓<span id="mn4">—</span></span><span class="sa">~<span id="ma4">—</span></span></div></div>
         <div class="mcard" style="--a:var(--amber)"><div class="ml">Humidity</div><div class="mv"><span id="m5">—</span><span class="mu">%</span></div><div class="mst"><span class="sv">↑<span id="mx5">—</span></span><span class="sn">↓<span id="mn5">—</span></span></div></div>
@@ -93,7 +95,7 @@
       <div class="g2">
         <div class="col">
           <div class="cc"><div class="ct">▸ Altitude Profile</div><div class="cw"><canvas id="ch0"></canvas></div></div>
-          <div class="cc"><div class="ct">▸ Vertical Acceleration <small>(calc)</small></div><div class="cw"><canvas id="ch2"></canvas></div></div>
+          <div class="cc"><div class="ct">▸ Vertical Acceleration</div><div class="cw"><canvas id="ch2"></canvas></div></div>
           <div class="cc"><div class="ct">▸ Accel XYZ <small>(mg)</small></div><div class="cw"><canvas id="ch4"></canvas></div></div>
           <div class="cc"><div class="ct">▸ PM Air Quality</div><div class="cw"><canvas id="ch6"></canvas></div></div>
         </div>
@@ -188,6 +190,21 @@
       </div>
     </div><!-- end tp1 -->
 
+    <!-- ══ TAB 2: MAP ══ -->
+    <div class="tab-panel" id="tp2" style="padding:0;height:calc(100vh - 80px);overflow:hidden;position:relative;">
+      <div id="map-container" style="width:100%;height:100%;"></div>
+      <div style="position:absolute;top:80px;left:10px;z-index:1001;display:flex;flex-direction:column;gap:4px;">
+        <button class="hbtn act" id="map-follow-btn" onclick="toggleMapFollow()">⊙ FOLLOW</button>
+        <button class="hbtn" onclick="mapFitPath()">⤢ FIT</button>
+      </div>
+      <div style="position:absolute;bottom:28px;left:10px;z-index:1001;background:rgba(5,14,26,0.88);padding:6px 12px;border-radius:6px;font-family:var(--font-mono);font-size:10px;color:var(--fg2);border:1px solid var(--border);display:flex;gap:14px;pointer-events:none;">
+        <span>LAT <strong id="map-lat" style="color:var(--cyan)">—</strong></span>
+        <span>LON <strong id="map-lon" style="color:var(--cyan)">—</strong></span>
+        <span>ALT <strong id="map-alt" style="color:var(--green)">—</strong> m</span>
+        <span>TRACK <strong id="map-pts" style="color:var(--fg2)">0</strong> pts</span>
+      </div>
+    </div><!-- end tp2 -->
+
   </div><!-- end #main-col -->
 
   <!-- ══ RIGHT PANEL ══ -->
@@ -224,7 +241,10 @@
       <div class="rp-hdr">POWER</div>
       <div class="ir"><div class="il">Current</div><div class="iv" id="vcurr">— mA</div></div>
       <div class="ir"><div class="il">Power</div><div class="iv" id="vwatt">— W</div></div>
-      <div class="btrack" style="margin-top:7px"><div class="bfill" id="bfill" style="width:0%"></div></div>
+      <div style="display:flex;align-items:center;gap:6px;margin-top:7px">
+        <div class="btrack" style="flex:1"><div class="bfill" id="bfill" style="width:0%"></div></div>
+        <span id="v-bat-pct" style="font-family:var(--font-mono);font-size:10px;min-width:32px;text-align:right;color:var(--fg2)">—%</span>
+      </div>
     </div>
 
     <!-- Air Quality -->
@@ -245,6 +265,7 @@
 
 </div><!-- end #app -->
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="dashboard.js"></script>
 </body>
 </html>

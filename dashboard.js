@@ -10,6 +10,9 @@ const startTs=Date.now();
 // Replay state
 let replayData=[], replayIdx=0, replayTimer=null, replayPlaying=false;
 
+// Map state
+let mapObj=null,mapMarker=null,mapPath=null,mapPathCoords=[],mapFollow=true;
+
 // ══════════════════════════════════════════════════════
 // HELPERS
 // ══════════════════════════════════════════════════════
@@ -92,6 +95,8 @@ function goTab(i){
       if(C.altFull)C.altFull.resize();
       refreshStats();
     },60);
+  } else if(i===2){
+    setTimeout(initMap,60);
   }
 }
 
@@ -215,7 +220,7 @@ const C={
   };
   set(C.alt,    T, 'Altitude (m)');
   set(C.spd,    T, 'Speed (m/s)');
-  set(C.vac,    T, 'Vert Accel (m/s²)');
+  set(C.vac,    T, 'Vert Accel (mg)');
   set(C.env,    T, 'Temp (°C)',   'Humidity (%)');
   set(C.acc,    T, 'Accel (mg)');
   set(C.pwr,    T, 'Voltage (V)', 'Current (mA)');
@@ -305,7 +310,7 @@ const CS={
 const SDEFS=[
   {key:'alt_baro',lbl:'Altitude',unit:'m'},{key:'temp',lbl:'Temperature',unit:'°C'},
   {key:'humidity',lbl:'Humidity',unit:'%'},{key:'speed',lbl:'Speed (calc)',unit:'m/s'},
-  {key:'vacc',lbl:'Vert Accel',unit:'m/s²'},{key:'accel_mag',lbl:'|Accel| (calc)',unit:'mg'},
+  {key:'vacc',lbl:'Vert Accel',unit:'mg'},{key:'accel_mag',lbl:'|Accel| (calc)',unit:'mg'},
   {key:'voltage',lbl:'Voltage',unit:'V'},
   {key:'current',lbl:'Current',unit:'mA'},{key:'watt',lbl:'Power',unit:'W'},
   {key:'pm1_0',lbl:'PM 1.0',unit:'µg'},{key:'pm2_5',lbl:'PM 2.5',unit:'µg'},
@@ -447,13 +452,17 @@ function doUpdate(d){
   updateCards();
   updateHealth(d);
 
-  si('vlat',d.lat.toFixed(6)+'°'); si('vlon',d.lon.toFixed(6)+'°'); si('vsat',d.sat+' sats');
+  si('vlat',d.lat===-1?'—':d.lat.toFixed(6)+'°'); si('vlon',d.lon===-1?'—':d.lon.toFixed(6)+'°'); si('vsat',d.sat+' sats');
+  updateMap(d.lat,d.lon,d.alt_baro);
   si('vcurr',fm(d.current,0)+' mA');
   const watt=d.watt!=null?d.watt:(d.voltage&&d.current?d.voltage*d.current/1000:null);
   si('vwatt',fm(watt,3)+' W');
   const bat=Math.min(100,Math.max(0,d.battery_percent||0));
+  const batColor=bat>50?'#00ff88':bat>20?'#ffc040':'#ff4060';
   const bf=document.getElementById('bfill');
-  bf.style.width=bat+'%'; bf.style.background=bat>50?'#00ff88':bat>20?'#ffc040':'#ff4060';
+  bf.style.width=bat+'%'; bf.style.background=batColor;
+  const bpct=document.getElementById('v-bat-pct');
+  if(bpct){bpct.textContent=bat.toFixed(0)+'%';bpct.style.color=batColor;}
 
   const pmx=Math.max(d.pm10||1,1);
   si('pv0',fm(d.pm1_0)); si('pv1',fm(d.pm2_5)); si('pv2',fm(d.pm10));
@@ -493,12 +502,16 @@ function loadHist(h){
       .forEach(k=>{if(d[k]!=null)track(k,d[k]);});
     track('speed',d.speed); track('vacc',d.vacc);
     updateHealth(d);
+    if(d.lat!==-1&&d.lon!==-1)mapPathCoords.push([d.lat,d.lon]);
   });
   si('vtot',totalPkts); si('vtot-sys',totalPkts);
   Object.values(CS).forEach(s=>s?.flush());
   if(C.as)C.as.update();
   refreshStats();
   if(h.length)si('v-team',h[h.length-1].team_id||'—');
+  si('map-pts',mapPathCoords.length);
+  if(mapPathCoords.length){const last=mapPathCoords[mapPathCoords.length-1];si('map-lat',last[0].toFixed(5));si('map-lon',last[1].toFixed(5));}
+  if(mapObj&&mapPath&&mapPathCoords.length>1){mapPath.setLatLngs(mapPathCoords);mapMarker.setLatLng(mapPathCoords[mapPathCoords.length-1]);mapObj.fitBounds(mapPath.getBounds().pad(0.2));}
 }
 
 // ══════════════════════════════════════════════════════
@@ -517,6 +530,11 @@ function clearAll(){
   ['st0','st1','st2','st3','st4','st5','st6','st7'].forEach(id=>si(id,'—'));
   for(let i=0;i<9;i++){si('m'+i,'—');const mx=document.getElementById('mx'+i);const mn=document.getElementById('mn'+i);const ma=document.getElementById('ma'+i);if(mx)mx.textContent='—';if(mn)mn.textContent='—';if(ma)ma.textContent='—';}
   document.getElementById('bfill').style.width='0%';
+  si('v-bat-pct','—%');
+  mapPathCoords=[];mapFollow=true;
+  if(mapObj&&mapPath)mapPath.setLatLngs([]);
+  si('map-lat','—');si('map-lon','—');si('map-alt','—');si('map-pts','0');
+  const mb=document.getElementById('map-follow-btn');if(mb){mb.textContent='⊙ FOLLOW';mb.classList.add('act');}
   showToast('↺ Cleared');
 }
 
@@ -583,8 +601,8 @@ function initAcc(){
 }
 function updAcc(vx,vy,vz){
   if(!rocketGroup)return;
-  // Map sensor axes to Three.js: sensor-Z (rocket long axis) → 3D-Y (up)
-  const d=new THREE.Vector3(vx,vz,vy).normalize();
+  // acc_y is rocket long axis pointing down → negate for 3D-Y (up)
+  const d=new THREE.Vector3(vx,-vy,vz).normalize();
   if(d.length()>.01){
     rocketGroup.setRotationFromQuaternion(
       new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),d)
@@ -594,9 +612,9 @@ function updAcc(vx,vy,vz){
 function updOrientation(vx,vy,vz){
   if(vx==null||vy==null||vz==null)return;
   const R2D=180/Math.PI;
-  const pitch=Math.atan2(vy,Math.sqrt(vx*vx+vz*vz))*R2D;
-  const roll=Math.atan2(-vx,vz)*R2D;
-  const tilt=Math.atan2(Math.sqrt(vx*vx+vy*vy),vz)*R2D;
+  const pitch=Math.atan2(-vz,-vy)*R2D;
+  const roll=Math.atan2(-vx,-vy)*R2D;
+  const tilt=Math.atan2(Math.sqrt(vx*vx+vz*vz),-vy)*R2D;
   // ANALYSIS tab
   si('apitch',fm(pitch,1));si('aroll',fm(roll,1));si('atilt',fm(tilt,1));
   // MONITOR tab metric cards
@@ -830,6 +848,52 @@ function replayStop(){
   replayPlaying=false;clearTimeout(replayTimer);replayIdx=0;
   si('replay-pos-label','0/'+(replayData.length||0));
   document.getElementById('rprog').style.width='0%';
+}
+
+// ══════════════════════════════════════════════════════
+// MAP (Leaflet + OpenStreetMap)
+// ══════════════════════════════════════════════════════
+function initMap(){
+  if(mapObj){setTimeout(()=>mapObj.invalidateSize(),60);return;}
+  if(typeof L==='undefined')return;
+  mapObj=L.map('map-container');
+  const osm=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',maxZoom:19});
+  const sat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{
+    attribution:'Tiles © Esri',maxZoom:19});
+  osm.addTo(mapObj);
+  L.control.layers({'🗺 Map':osm,'🛰 Satellite':sat},{},{position:'topright'}).addTo(mapObj);
+  const icon=L.divIcon({html:'<div style="width:12px;height:12px;border-radius:50%;background:#00ff88;border:2px solid #fff;box-shadow:0 0 10px #00ff88;"></div>',className:'',iconSize:[12,12],iconAnchor:[6,6]});
+  const initPos=mapPathCoords.length?mapPathCoords[mapPathCoords.length-1]:[13.7563,100.5018];
+  mapMarker=L.marker(initPos,{icon}).addTo(mapObj);
+  mapPath=L.polyline([],{color:'#00d4ff',weight:3,opacity:0.9}).addTo(mapObj);
+  if(mapPathCoords.length>1){mapPath.setLatLngs(mapPathCoords);mapObj.fitBounds(mapPath.getBounds().pad(0.2));}
+  else if(mapPathCoords.length===1){mapObj.setView(mapPathCoords[0],15);}
+  else{mapObj.setView(initPos,13);}
+  setTimeout(()=>mapObj.invalidateSize(),100);
+}
+function updateMap(lat,lon,alt){
+  if(lat==null||lon==null||lat===-1||lon===-1)return;
+  const ll=[lat,lon];
+  mapPathCoords.push(ll);
+  si('map-lat',lat.toFixed(5));si('map-lon',lon.toFixed(5));
+  si('map-alt',alt!=null&&alt!==0?alt.toFixed(0):'—');
+  si('map-pts',mapPathCoords.length);
+  if(!mapObj||!mapPath||!mapMarker)return;
+  mapPath.setLatLngs(mapPathCoords);
+  mapMarker.setLatLng(ll);
+  if(mapFollow)mapObj.panTo(ll,{animate:true,duration:0.3});
+}
+function toggleMapFollow(){
+  mapFollow=!mapFollow;
+  const b=document.getElementById('map-follow-btn');
+  if(b){b.textContent=mapFollow?'⊙ FOLLOW':'⊙ FREE';b.classList.toggle('act',mapFollow);}
+  if(mapFollow&&mapPathCoords.length&&mapObj)mapObj.panTo(mapPathCoords[mapPathCoords.length-1]);
+}
+function mapFitPath(){
+  if(!mapObj||!mapPathCoords.length)return;
+  if(mapPathCoords.length>1)mapObj.fitBounds(mapPath.getBounds().pad(0.15));
+  else mapObj.setView(mapPathCoords[0],15);
 }
 
 // ══════════════════════════════════════════════════════
