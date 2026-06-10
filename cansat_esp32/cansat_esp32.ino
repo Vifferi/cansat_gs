@@ -70,6 +70,7 @@
 
 #define APOGEE_MIN_ALT_M    250.0f      // ต้องขึ้นไปอย่างน้อย 250m ก่อน detect apogee
 #define LANDED_THRESH_M     2.0f        // ถ้าต่ำกว่า 2m และไม่ขยับ = ลงจอด
+#define FAILSAFE_TIMEOUT_MS 10000UL    // ถ้า sensor ทั้งคู่ตาย → force deploy หลัง 10s
 
 // Status bitmask — ตรงกับ server.py decode_status()
 #define STATUS_ASCENDING    1
@@ -220,14 +221,35 @@ int updateFlightStatus(float alt, float acc_y) {
     if (alt > peak_alt) peak_alt = alt;
 
     switch (flight_status) {
-        case STATUS_ASCENDING:
-            if (peak_alt > APOGEE_MIN_ALT_M && (peak_alt - alt) >= 2.0f && acc_y < 500.0f) {
+        case STATUS_ASCENDING: {
+            bool baro_ok = bme_ok || bmp_ok;
+            bool apogee_detected = false;
+
+            if (baro_ok && adxl_ok) {
+                // ปกติ — ต้องผ่านทั้ง 3 เงื่อนไข
+                apogee_detected = (peak_alt > APOGEE_MIN_ALT_M) &&
+                                  ((peak_alt - alt) >= 2.0f) &&
+                                  (acc_y < 500.0f);
+            } else if (baro_ok && !adxl_ok) {
+                // ADXL เสีย — ใช้แค่ baro
+                apogee_detected = (peak_alt > APOGEE_MIN_ALT_M) &&
+                                  ((peak_alt - alt) >= 2.0f);
+            } else if (!baro_ok && adxl_ok) {
+                // Baro เสีย — ใช้แค่ acc_y
+                apogee_detected = (acc_y < 500.0f);
+            } else {
+                // ทั้งคู่เสีย — force deploy หลัง 10s
+                apogee_detected = (millis() - start_ms >= FAILSAFE_TIMEOUT_MS);
+            }
+
+            if (apogee_detected) {
                 deployServo.write(90);
                 deployed = true;
                 beepStart(200, 3);
                 flight_status = STATUS_APOGEE;
             }
             break;
+        }
 
         case STATUS_APOGEE:
             if (!apogee_enter_ms) apogee_enter_ms = millis();
