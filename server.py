@@ -106,8 +106,51 @@ def parse_csv_line(line: str):
     if not line or line.startswith("team_id"):
         return None
     parts = line.split(",")
-    if len(parts) != len(CSV_HEADERS):
-        log.warning(f"Wrong field count ({len(parts)}): {line[:60]}")
+    n = len(parts)
+    EXPECTED = len(CSV_HEADERS)
+
+    if n > EXPECTED:
+        # Multiple LoRa packets concatenated (SF11 ToA > send interval).
+        # Each boundary: status of record K and team_id of record K+1 are merged
+        # e.g. status="1" + team_id="14" → "114" as one field.
+        # Layout: R1 = parts[0:21] (21 fields, team_id present)
+        #         R2 = [team_id] + parts[21:41] (20 fields, team_id stripped into R1's last)
+        #         R3 = partial, skip
+        team_id_val = parts[0].strip()
+        n_ti = len(team_id_val)
+
+        def _fix_last(chunk):
+            chunk = list(chunk)
+            last = chunk[-1].strip()
+            if last.endswith(team_id_val) and len(last) > n_ti:
+                try:
+                    int(last[:-n_ti])
+                    chunk[-1] = last[:-n_ti]
+                except ValueError:
+                    pass
+            return chunk
+
+        best = None
+        # Prefer R2 (more recent) if complete
+        if n >= EXPECTED + (EXPECTED - 1):
+            r2 = _fix_last([team_id_val] + parts[EXPECTED: EXPECTED + (EXPECTED - 1)])
+            if len(r2) == EXPECTED:
+                best = r2
+        # Fall back to R1
+        if best is None:
+            best = _fix_last(parts[:EXPECTED])
+
+        if best:
+            parts = best
+            n = EXPECTED
+        else:
+            log.warning(f"Wrong field count ({n}): {line}")
+            return None
+
+    if n == EXPECTED - 1:
+        parts.append("0")   # status field missing — default ascending
+    elif n != EXPECTED:
+        log.warning(f"Wrong field count ({n}): {line}")
         return None
     data = {}
     for k, v in zip(CSV_HEADERS, parts):
@@ -819,7 +862,14 @@ async def serial_reader(port: str):
                     await asyncio.sleep(0.01)
                     continue
 
-                log.info(f"RAW: {line.strip()[:80]}")
+                stripped = line.strip()
+                if stripped.startswith("#"):
+                    log.info(f"GS: {stripped}")
+                    continue
+                # Skip ESP32 boot messages (don't start with digit)
+                if not stripped or not stripped[0].isdigit():
+                    continue
+                log.info(f"RAW: {stripped}")
                 data = parse_sensor_line(line)
                 if data is not None:
                     log.info(f"SENSOR {data['sensor']}: {line.strip()[:60]}")

@@ -84,6 +84,7 @@ Adafruit_BMP280     bmp;
 Adafruit_ADXL345_Unified adxl(12345);
 QMC5883LCompass     compass;
 SFE_MAX1704X        fuelGauge(MAX1704X_MAX17043);
+//SFE_MAX1704X        fuelGauge(MAX17043);
 Adafruit_INA219     ina219;
 TinyGPSPlus         gps;
 Servo               deployServo;
@@ -102,9 +103,10 @@ bool sd_ok      = false;
 bool lora_ok    = false;
 
 // ─── Runtime state ────────────────────────────────────────────────────────────
-uint32_t packet_id  = 0;
-uint32_t start_ms   = 0;
-uint32_t last_send  = 0;
+uint32_t packet_id    = 0;
+uint32_t start_ms     = 0;
+uint32_t last_send    = 0;
+uint32_t last_lora_ms = 0;
 
 float    peak_alt   = 0.0f;
 float    prev_alt   = 0.0f;
@@ -345,7 +347,7 @@ void setup() {
     if (!ina_ok) Serial.println("# [WARN] INA219 not found");
 
     // GPS
-    gpsSerial.begin(9600, SERIAL_8N1, GPS_RX, GPS_TX);
+    gpsSerial.begin(115200, SERIAL_8N1, GPS_RX, GPS_TX);
 
     // PMSA003
     pmsSerial.begin(9600, SERIAL_8N1, PMS_RX, PMS_TX);
@@ -494,9 +496,11 @@ void loop() {
     Serial.println(line);    // → server.py via USB (21 fields)
     sdWrite(sd_line);        // → SD card (22 fields with wall_clock)
 
-    if (lora_ok) {           // → GS ESP32 via LoRa (21 fields, same as Serial)
+    // SF11 BW125 ToA ~2s — throttle to prevent packets merging in FIFO (min 2200ms)
+    if (lora_ok && (millis() - last_lora_ms >= 2200)) {
         LoRa.beginPacket();
         LoRa.print(line);
-        LoRa.endPacket(true);   // async — ไม่รอ DIO0 interrupt เพื่อป้องกัน crash
+        LoRa.endPacket(true);
+        last_lora_ms = millis();
     }
 }
