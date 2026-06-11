@@ -10,9 +10,9 @@
  *   DIO  : Buzzer (ผ่าน transistor 2N5904)
  *
  * Serial output (CSV) → server.py @ 115200 baud:
- *   team_id,time,packet_id,lat,lon,sat,temp,humidity,alt_baro,
- *   acc_x,acc_y,acc_z,heading,pm1_0,pm2_5,pm10,
- *   voltage,current,watt,battery_percent,status
+ *   team_id,acc_mag,battery_percent,lat,lon,alt_baro,
+ *   time,packet_id,sat,temp,humidity,heading,
+ *   voltage,current,watt,pm1_0,pm2_5,pm10,acc_x,acc_y,acc_z,status  (22 fields)
  *
  * Libraries ที่ต้องติดตั้ง (Arduino Library Manager):
  *   - Adafruit BME280 Library
@@ -64,9 +64,9 @@
 #define SEA_LEVEL_HPA       1013.25f    // ปรับตามวันบิน (ดูจาก weather station)
 
 // ─── LoRa Config (ทีม 14 — UNISEC Thailand 2026) ─────────────────────────────
-#define LORA_FREQ_HZ        923.75E6    // Main Center Frequency
+#define LORA_FREQ_HZ        926.5E6     // Main Center Frequency
 #define LORA_BW_HZ          125E3       // Main BW 125 kHz
-#define LORA_SF             11          // Main SF
+#define LORA_SF             8           // Main SF
 
 #define APOGEE_MIN_ALT_M    267.0f      // ต้องขึ้นไปอย่างน้อย 267m ก่อน detect apogee
 #define LANDED_THRESH_M     50.0f       // ถ้าต่ำกว่า 50m และไม่ขยับ = ลงจอด
@@ -250,9 +250,9 @@ void sdFlush() {
     snprintf(fname, sizeof(fname), "/log_%03u.csv", sd_file_index);
     File f = SD.open(fname, FILE_WRITE);
     if (!f) { sd_buf_count = 0; return; }
-    f.println("team_id,wall_clock,time,packet_id,lat,lon,sat,temp,humidity,alt_baro,"
-              "acc_x,acc_y,acc_z,heading,pm1_0,pm2_5,pm10,"
-              "voltage,current,watt,battery_percent,status");
+    f.println("team_id,wall_clock,acc_mag,battery_percent,"
+              "lat,lon,alt_baro,time,packet_id,sat,temp,humidity,heading,"
+              "voltage,current,watt,pm1_0,pm2_5,pm10,acc_x,acc_y,acc_z,status");
     for (uint8_t i = 0; i < sd_buf_count; i++) {
         f.println(sd_buffer[i]);
     }
@@ -269,6 +269,21 @@ void sdWrite(const char* line) {
     if (sd_buf_count >= SD_FLUSH_EVERY) sdFlush();
 }
 
+
+// ── LiPo voltage → percent (piecewise linear, single cell) ──────────────────
+static const float LV[] = {3.00,3.20,3.40,3.60,3.70,3.80,3.90,4.00,4.10,4.20};
+static const float LP[] = {   0,   5,  10,  25,  40,  55,  70,  82,  92, 100};
+float voltageToPct(float v) {
+    if (v <= LV[0]) return 0.0f;
+    if (v >= LV[9]) return 100.0f;
+    for (int i = 1; i < 10; i++) {
+        if (v <= LV[i]) {
+            float t = (v - LV[i-1]) / (LV[i] - LV[i-1]);
+            return LP[i-1] + t * (LP[i] - LP[i-1]);
+        }
+    }
+    return 100.0f;
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Setup
@@ -361,7 +376,7 @@ void setup() {
         Serial.printf("# SD ready — next file: log_%03u.csv\n", sd_file_index + 1);
     }
 
-    // LoRa RFM95W — ทีม 14: 923.75 MHz, BW 125 kHz, SF 11
+    // LoRa RFM95W — ทีม 14: 926.5 MHz, BW 125 kHz, SF 8
     LoRa.setPins(LORA_NSS_PIN, LORA_RST_PIN, LORA_DIO0_PIN);
     lora_ok = LoRa.begin(LORA_FREQ_HZ);
     if (lora_ok) {
@@ -409,6 +424,7 @@ void loop() {
         acc_y = evt.acceleration.y;   // m/s²
         acc_z = evt.acceleration.z;   // m/s²
     }
+    float acc_mag = sqrtf(acc_x*acc_x + acc_y*acc_y + acc_z*acc_z);  // m/s²
 
     // ── QMC5883L ──────────────────────────────────────────────────────────────
     float heading = 0.0f;
@@ -417,13 +433,16 @@ void loop() {
         heading = (float)compass.getAzimuth();
     }
 
-    // ── MAX17043 ──────────────────────────────────────────────────────────────
-    float bat_pct = fuel_ok ? (float)fuelGauge.getSOC() : -1.0f;
-
     // ── INA219 ────────────────────────────────────────────────────────────────
     float voltage = ina_ok ? ina219.getBusVoltage_V()  : -1.0f;
     float current = ina_ok ? ina219.getCurrent_mA()    : -1.0f;
     float watt    = ina_ok ? voltage * current / 1000.0f : -1.0f;
+    static float voltage_smooth = -1.0f;
+    if (ina_ok) {
+        if (voltage_smooth < 0) voltage_smooth = voltage;
+        else voltage_smooth = 0.05f * voltage + 0.95f * voltage_smooth;
+    }
+    float bat_pct = ina_ok ? voltageToPct(voltage_smooth) : -1.0f;
 
     // ── GPS ───────────────────────────────────────────────────────────────────
     double lat = gps.location.isValid() ? gps.location.lat()      : -1.0;
@@ -450,46 +469,50 @@ void loop() {
                  gps.time.hour(), gps.time.minute(), gps.time.second());
     }
 
-    // ── Build CSV line for Serial → server.py (21 fields, no wall_clock) ─────
-    char line[160];
+    // ── Build CSV line for Serial → server.py (22 fields, no wall_clock) ─────
+    char line[192];
     snprintf(line, sizeof(line),
-        "%s,%.1f,%lu,%.7f,%.7f,%d,"
+        "%s,%.2f,%.1f,"
+        "%.7f,%.7f,%.1f,"
+        "%.1f,%lu,%d,"
         "%.2f,%.2f,%.1f,"
-        "%.1f,%.1f,%.1f,%.1f,"
+        "%.2f,%.1f,%.3f,"
         "%.1f,%.1f,%.1f,"
-        "%.2f,%.1f,%.3f,%.1f,%d",
-        TEAM_ID, t, packet_id,
-        lat, lon, sat,
-        temp, humidity, alt_baro,
-        acc_x, acc_y, acc_z, heading,
+        "%.1f,%.1f,%.1f,%d",
+        TEAM_ID, acc_mag, bat_pct,
+        lat, lon, alt_baro,
+        t, packet_id, sat,
+        temp, humidity, heading,
+        voltage, current, watt,
         pm1_0, pm2_5, pm10,
-        voltage, current, watt, bat_pct,
-        status
+        acc_x, acc_y, acc_z, status
     );
 
-    // ── Build SD line (22 fields — เพิ่ม wall_clock หลัง team_id) ────────────
-    char sd_line[192];
+    // ── Build SD line (23 fields — เพิ่ม wall_clock หลัง team_id) ────────────
+    char sd_line[224];
     snprintf(sd_line, sizeof(sd_line),
-        "%s,%s,%.1f,%lu,%.7f,%.7f,%d,"
+        "%s,%s,%.2f,%.1f,"
+        "%.7f,%.7f,%.1f,"
+        "%.1f,%lu,%d,"
         "%.2f,%.2f,%.1f,"
-        "%.1f,%.1f,%.1f,%.1f,"
+        "%.2f,%.1f,%.3f,"
         "%.1f,%.1f,%.1f,"
-        "%.2f,%.1f,%.3f,%.1f,%d",
-        TEAM_ID, wall_clock, t, packet_id,
-        lat, lon, sat,
-        temp, humidity, alt_baro,
-        acc_x, acc_y, acc_z, heading,
+        "%.1f,%.1f,%.1f,%d",
+        TEAM_ID, wall_clock, acc_mag, bat_pct,
+        lat, lon, alt_baro,
+        t, packet_id, sat,
+        temp, humidity, heading,
+        voltage, current, watt,
         pm1_0, pm2_5, pm10,
-        voltage, current, watt, bat_pct,
-        status
+        acc_x, acc_y, acc_z, status
     );
 
     // ── Output ────────────────────────────────────────────────────────────────
-    Serial.println(line);    // → server.py via USB (21 fields)
-    sdWrite(sd_line);        // → SD card (22 fields with wall_clock)
+    Serial.println(line);    // → server.py via USB (22 fields)
+    sdWrite(sd_line);        // → SD card (23 fields with wall_clock)
 
-    // SF11 BW125 ToA ~2s — throttle to prevent packets merging in FIFO (min 2200ms)
-    if (lora_ok && (millis() - last_lora_ms >= 2200)) {
+    // SF8 BW125 ToA ~270ms — throttle ป้องกัน packet ชน (min 500ms)
+    if (lora_ok && (millis() - last_lora_ms >= 500)) {
         if (LoRa.beginPacket()) {
             LoRa.print(line);
             LoRa.endPacket(true);

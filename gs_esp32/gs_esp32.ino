@@ -27,9 +27,9 @@
 #define LORA_DIO0_PIN   2
 
 // ─── LoRa Config (ทีม 14 — UNISEC Thailand 2026) ─────────────────────────────
-#define LORA_FREQ_HZ    923.75E6    // Main Center Frequency
+#define LORA_FREQ_HZ    926.5E6     // Main Center Frequency
 #define LORA_BW_HZ      125E3       // Main BW 125 kHz
-#define LORA_SF         11          // Main SF
+#define LORA_SF         8           // Main SF
 
 #define BAUD_USB        115200
 
@@ -51,7 +51,7 @@ void setup() {
     LoRa.setSpreadingFactor(LORA_SF);
     LoRa.enableCrc();
 
-    Serial.println("# GS LoRa ready — 923.75 MHz SF11 BW125");
+    Serial.println("# GS LoRa ready — 926.5 MHz SF8 BW125");
 }
 
 
