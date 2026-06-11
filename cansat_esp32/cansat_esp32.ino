@@ -70,7 +70,8 @@
 
 #define APOGEE_MIN_ALT_M    267.0f      // ต้องขึ้นไปอย่างน้อย 267m ก่อน detect apogee
 #define LANDED_THRESH_M     50.0f       // ถ้าต่ำกว่า 50m และไม่ขยับ = ลงจอด
-#define FAILSAFE_TIMEOUT_MS 10000UL    // ถ้า sensor ทั้งคู่ตาย → force deploy หลัง 10s
+#define FAILSAFE_TIMEOUT_MS 10000UL    // ถ้า sensor ทั้งคู่ตาย → force deploy หลัง 10s นับจาก launch
+#define LAUNCH_ACCEL_MS2    20.0f      // ~2g = จรวดออกตัว
 
 // Status bitmask — ตรงกับ server.py decode_status()
 #define STATUS_ASCENDING    1
@@ -113,6 +114,8 @@ float    peak_alt   = 0.0f;
 float    prev_alt   = 0.0f;
 int      flight_status = STATUS_ASCENDING;
 bool     deployed   = false;
+bool     launched   = false;
+uint32_t launch_ms  = 0;
 
 // PM sensor buffer
 uint8_t  pms_buf[32];
@@ -188,6 +191,14 @@ int updateFlightStatus(float alt, float acc_y) {
 
     if (alt > peak_alt) peak_alt = alt;
 
+    // ตรวจ launch จาก acc_y หรือ fallback ถ้า IMU เสียด้วย
+    if (!launched) {
+        if (adxl_ok ? fabsf(acc_y) > LAUNCH_ACCEL_MS2 : false) {
+            launched  = true;
+            launch_ms = millis();
+        }
+    }
+
     switch (flight_status) {
         case STATUS_ASCENDING: {
             bool baro_ok = bme_ok || bmp_ok;
@@ -197,8 +208,8 @@ int updateFlightStatus(float alt, float acc_y) {
                 apogee_detected = (peak_alt > APOGEE_MIN_ALT_M) &&
                                   ((peak_alt - alt) >= 3.0f);
             } else {
-                // Baro เสีย — force deploy หลัง 10s
-                apogee_detected = (millis() - start_ms >= FAILSAFE_TIMEOUT_MS);
+                // Baro เสีย — force deploy หลัง 10s นับจาก launch
+                apogee_detected = launched && (millis() - launch_ms >= FAILSAFE_TIMEOUT_MS);
             }
 
             if (apogee_detected) {
