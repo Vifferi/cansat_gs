@@ -68,7 +68,7 @@
 #define LORA_BW_HZ          125E3       // Main BW 125 kHz
 #define LORA_SF             8           // Main SF
 
-#define APOGEE_MIN_ALT_M    267.0f      // ต้องขึ้นไปอย่างน้อย 267m ก่อน detect apogee
+#define APOGEE_MIN_ALT_M    100.0f      // ต้องขึ้นไปอย่างน้อย 100m ก่อน detect apogee
 #define LANDED_THRESH_M     50.0f       // ถ้าต่ำกว่า 50m และไม่ขยับ = ลงจอด
 #define FAILSAFE_TIMEOUT_MS 10000UL    // ถ้า sensor ทั้งคู่ตาย → force deploy หลัง 10s นับจาก launch
 #define LAUNCH_ACCEL_MS2    20.0f      // ~2g = จรวดออกตัว
@@ -213,7 +213,7 @@ int updateFlightStatus(float alt, float acc_y) {
             }
 
             if (apogee_detected) {
-                deployServo.write(45);
+                deployServo.write(60);
                 deployed = true;
                 flight_status = STATUS_APOGEE;
             }
